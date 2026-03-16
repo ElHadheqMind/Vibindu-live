@@ -182,7 +182,30 @@ const GsrsmModes: React.FC<GsrsmModesProps> = ({ sectionPositions }) => {
   // Handle mode click
   const handleModeClick = (modeId: string | undefined, code: string) => {
     if (modeId) {
-      activateMode(modeId);
+      const mode = modes.find(m => m.id === modeId);
+      const isActive = mode?.type === 'active';
+
+      if (isActive) {
+        // Show confirmation popup when clicking an active mode
+        usePopupStore.getState().showConfirm(
+          t('COMMON.CONFIRM_DEACTIVATE_TITLE') || 'Deactivate Mode',
+          `Are you sure you want to deactivate mode ${code}? This mode has an associated folder.${'\n\n'}You can choose to keep the folder or delete it along with its contents.`,
+          [
+            { label: 'Cancel', action: 'cancel', variant: 'secondary' },
+            { label: 'Deactivate Only', action: 'deactivate', variant: 'secondary' },
+            { label: 'Deactivate & Delete folder', action: 'delete', variant: 'danger' }
+          ],
+          (action) => {
+            if (action === 'deactivate') {
+              deactivateMode(modeId, false);
+            } else if (action === 'delete') {
+              deactivateMode(modeId, true);
+            }
+          }
+        );
+      } else {
+        activateMode(modeId);
+      }
     } else {
       console.warn(`Mode with code ${code} not found in store`);
     }
@@ -206,7 +229,26 @@ const GsrsmModes: React.FC<GsrsmModesProps> = ({ sectionPositions }) => {
     const options = [
       {
         label: t('COMMON.USER_ACTION_DEACTIVATE') || 'Deactivate',
-        action: () => modeId && deactivateMode(modeId),
+        action: () => {
+          if (modeId) {
+            usePopupStore.getState().showConfirm(
+              t('COMMON.CONFIRM_DEACTIVATE_TITLE') || 'Deactivate Mode',
+              `Are you sure you want to deactivate mode ${code}? This mode has an associated folder.${'\n\n'}You can choose to keep the folder or delete it along with its contents.`,
+              [
+                { label: 'Cancel', action: 'cancel', variant: 'secondary' },
+                { label: 'Deactivate Only', action: 'deactivate', variant: 'secondary' },
+                { label: 'Deactivate & Delete folder', action: 'delete', variant: 'danger' }
+              ],
+              (action) => {
+                if (action === 'deactivate') {
+                  deactivateMode(modeId, false);
+                } else if (action === 'delete') {
+                  deactivateMode(modeId, true);
+                }
+              }
+            );
+          }
+        },
         icon: 'power-off',
       },
       {

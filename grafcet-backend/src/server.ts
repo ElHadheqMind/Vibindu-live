@@ -8,6 +8,7 @@ import sfcRoutes from './routes/sfcRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import contactRoutes from './routes/contactRoutes.js';
 import demoAccessRoutes from './routes/demoAccessRoutes.js';
+import accessRequestRoutes from './routes/accessRequestRoutes.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -65,6 +66,7 @@ app.use('/api/vibe', authenticateToken, vibeChatRoutes);
 app.use('/api/render', authenticateToken, renderRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/demo-access', demoAccessRoutes);
+app.use('/api/access-request', accessRequestRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -92,9 +94,9 @@ const server = app.listen(PORT, async () => {
   console.log(`🌐 CORS enabled for frontend development`);
   console.log(`📊 Health check available at http://localhost:${PORT}/health`);
 
-  // Seed demo user
+  // Seed default accounts
   const { AuthService } = await import('./services/authService.js');
-  await AuthService.seedDemoUser();
+  await AuthService.seedDefaultAccounts();
 });
 
 // Initialize Socket.IO
@@ -119,21 +121,11 @@ io.on('connection', (socket) => {
   });
 });
 
-// Initialize WatcherService
-// Use STORAGE_PATH or fallback to a default (e.g., project root or a specific data dir)
-// Assuming storage path is available via env or defaulting to current dir for now if not set
-const storagePath = process.env.STORAGE_PATH || path.join(process.cwd(), 'data'); // Adjust default as needed based on actual setup
-// Ensure directory exists if possible, but watcher handles it usually.
-// Ideally, we watch the root where projects are.
-// Based on fileRoutes, it seems operations are relative to STORAGE_PATH.
-if (process.env.STORAGE_PATH) {
-  watcherService = new WatcherService(io, process.env.STORAGE_PATH);
-} else {
-  console.warn('⚠️ STORAGE_PATH not set. Watcher service might not watch the correct directory.');
-  // Fallback to watching 'C:/Users/pc/Desktop/G7V0101' or similar if known, or just log warning.
-  // For now, let's try to infer or wait for config.
-  // If flydrive storage is used, we should watch that.
-}
+import { getBaseStoragePath } from './config/storage.js';
+
+const storagePath = getBaseStoragePath();
+console.log(`[Server] Initializing WatcherService on path: ${storagePath}`);
+watcherService = new WatcherService(io, storagePath);
 
 // Graceful shutdown
 process.on('SIGTERM', () => {

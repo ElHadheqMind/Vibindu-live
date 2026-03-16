@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { io, Socket } from 'socket.io-client';
+import { API_ROOT } from '../config';
 
 interface SocketState {
     socket: Socket | null;
@@ -24,7 +25,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
         // Connect to the backend URL
         // Adjust URL if your backend runs on a different port/host in different environments
-        const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+        const backendUrl = API_ROOT;
 
         console.log('🔌 Connecting to WebSocket:', backendUrl);
 

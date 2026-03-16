@@ -3,17 +3,13 @@ import styled from 'styled-components';
 import { useProjectStore } from '../../../store/useProjectStore';
 import { useElementsStore } from '../../../store/useElementsStore';
 import { ApiService } from '../../../services/apiService';
+import { API_BASE_URL } from '../../../config';
 import { v4 as uuidv4 } from 'uuid';
-import { Stage, Layer } from 'react-konva';
 import Konva from 'konva';
 import { exportToPng, exportToPdf, getDiagramImage } from '../../../utils/exportUtils';
+import Canvas from '../../Canvas/Canvas';
 
 // Import official element components
-import Step from '../../Elements/Step';
-import Transition from '../../Elements/Transition';
-import Connection from '../../Elements/Connection';
-import Gate from '../../Elements/Gate';
-import ActionBlock from '../../Elements/ActionBlock';
 import SaveDiagramModal from '../../UI/SaveDiagramModal';
 
 const Container = styled.div`
@@ -211,7 +207,7 @@ const ServerPage: React.FC = () => {
     const [lastCompiledDiagram, setLastCompiledDiagram] = useState<any>(null);
 
     const stageRef = useRef<Konva.Stage>(null);
-    const { elements, loadElements } = useElementsStore();
+    const { loadElements } = useElementsStore();
     const { currentProjectId, projects } = useProjectStore();
     const currentProject = currentProjectId ? projects.find(p => p.id === currentProjectId) : null;
 
@@ -222,7 +218,7 @@ const ServerPage: React.FC = () => {
         setDiagramImageUrl(null);
 
         try {
-            const response = await fetch('http://localhost:3001/api/sfc/compile', {
+            const response = await fetch(`${API_BASE_URL}/sfc/compile`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ code })
@@ -375,19 +371,8 @@ const ServerPage: React.FC = () => {
             </PreviewArea>
 
             {/* CRITICAL: Hidden stage that uses the ACTUAL editor components */}
-            <div style={{ position: 'absolute', left: '-10000px', top: '-10000px', pointerEvents: 'none' }}>
-                <Stage ref={stageRef} width={3000} height={3000}>
-                    <Layer>
-                        {elements.map((el) => {
-                            if (el.type === 'step') return <Step key={el.id} step={el} />;
-                            if (el.type === 'transition') return <Transition key={el.id} transition={el} />;
-                            if (el.type === 'connection') return <Connection key={el.id} connection={el} />;
-                            if (el.type === 'and-gate' || el.type === 'or-gate') return <Gate key={el.id} gate={el} />;
-                            if (el.type === 'action-block') return <ActionBlock key={el.id} actionBlock={el as any} />;
-                            return null;
-                        })}
-                    </Layer>
-                </Stage>
+            <div style={{ position: 'absolute', left: '-10000px', top: '-10000px', pointerEvents: 'none', width: '3000px', height: '3000px' }}>
+                <Canvas ref={stageRef as any} />
             </div>
 
             <SaveDiagramModal

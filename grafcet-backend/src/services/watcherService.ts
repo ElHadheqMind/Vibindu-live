@@ -20,7 +20,11 @@ export class WatcherService {
             ignored: /(^|[\/\\])\../, // ignore dotfiles
             persistent: true,
             ignoreInitial: true, // Don't emit add events for existing files on startup
-            depth: 10
+            depth: 10,
+            awaitWriteFinish: {
+                stabilityThreshold: 500, // Wait 500ms after file size stops changing
+                pollInterval: 100 // Check size every 100ms
+            }
         });
 
         this.watcher

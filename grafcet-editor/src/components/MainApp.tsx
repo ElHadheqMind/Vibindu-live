@@ -37,6 +37,7 @@ import { useFileExplorerStore } from '../store/useFileExplorerStore';
 import VibeSidebar from './VibeSidebar';
 import MarkdownViewer from './Editors/MarkdownViewer';
 import MediaViewer, { isImageFile, isVideoFile } from './Editors/MediaViewer';
+import HtmlViewer from './Editors/HtmlViewer';
 import { useAutoRefresh } from '../hooks/useAutoRefresh';
 
 const AppContainer = styled.div`
@@ -131,7 +132,9 @@ const MainApp: React.FC = () => {
   const [isInitialized, setIsInitialized] = useState(false);
   // Show welcome if on /welcome OR on / with no project (avoids needing a redirect)
   const [showWelcome, setShowWelcome] = useState(
-    location.pathname === '/welcome' || (location.pathname === '/' && !projectParam)
+    // Show welcome if: on /welcome WITH NO project param, or on / with no project param
+    // If there's a project param, we're loading a specific project — don't show welcome
+    !projectParam && (location.pathname === '/welcome' || location.pathname === '/')
   );
   const [editorType, setEditorType] = useState<EditorType>('grafcet');
   const [sidebarVisible, setSidebarVisible] = useState(true);
@@ -139,6 +142,7 @@ const MainApp: React.FC = () => {
   const [basePath, setBasePath] = useState<string>('');
   const [openedMarkdownFile, setOpenedMarkdownFile] = useState<string | null>(null);
   const [openedMediaFile, setOpenedMediaFile] = useState<string | null>(null);
+  const [openedHtmlFile, setOpenedHtmlFile] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchBasePath = async () => {
@@ -254,8 +258,9 @@ const MainApp: React.FC = () => {
               if (restored) {
                 console.log('✅ [MainApp] Diagram restored successfully on refresh');
               } else {
-                console.warn('⚠️ [MainApp] Diagram restoration failed, will retry when basePath is available');
-                // Reset flag to allow retry when basePath becomes available
+                console.warn('⚠️ [MainApp] Diagram restoration failed - showing welcome screen');
+                // File no longer exists (stale path cleared in store) — show welcome
+                setShowWelcome(true);
                 diagramRestorationAttempted.current = false;
               }
             } else {
@@ -425,6 +430,16 @@ const MainApp: React.FC = () => {
     if (isMarkdownFile) {
       setOpenedMarkdownFile(absolutePath);
       setOpenedMediaFile(null);
+      setOpenedHtmlFile(null);
+      setShowWelcome(false);
+      return;
+    }
+
+    // Handle HTML files - open in viewer
+    if (lowerPath.endsWith('.html')) {
+      setOpenedHtmlFile(absolutePath);
+      setOpenedMarkdownFile(null);
+      setOpenedMediaFile(null);
       setShowWelcome(false);
       return;
     }
@@ -433,6 +448,7 @@ const MainApp: React.FC = () => {
     if (isMedia) {
       setOpenedMediaFile(absolutePath);
       setOpenedMarkdownFile(null);
+      setOpenedHtmlFile(null);
       setShowWelcome(false);
       return;
     }
@@ -443,6 +459,9 @@ const MainApp: React.FC = () => {
     }
     if (openedMediaFile) {
       setOpenedMediaFile(null);
+    }
+    if (openedHtmlFile) {
+      setOpenedHtmlFile(null);
     }
 
     if (isFile) {
@@ -464,6 +483,8 @@ const MainApp: React.FC = () => {
         await useGsrsmFileStore.getState().loadFile(absolutePath);
       } else {
         console.debug('⏭️ File already loaded, skipping redundant load:', absolutePath);
+        // Still dismiss welcome screen if it's open
+        if (showWelcome) setShowWelcome(false);
       }
     } else {
       // Path is a project directory - load via project API
@@ -506,6 +527,8 @@ const MainApp: React.FC = () => {
         }
       } else {
         console.debug('⏭️ Project already loaded, skipping redundant load:', absolutePath);
+        // Still dismiss welcome screen if it's open
+        if (showWelcome) setShowWelcome(false);
       }
     }
   };
@@ -527,6 +550,7 @@ const MainApp: React.FC = () => {
         onToggleVibe={() => setVibeSidebarOpen(!vibeSidebarOpen)}
         sidebarVisible={sidebarVisible}
         onToggleSidebar={() => setSidebarVisible(!sidebarVisible)}
+        showAI={!showWelcome}
       />
       <EditorLayout>
         <SidebarContainer $isVisible={sidebarVisible && !showWelcome}>
@@ -543,6 +567,11 @@ const MainApp: React.FC = () => {
               <MediaViewer
                 filePath={openedMediaFile}
                 onClose={() => setOpenedMediaFile(null)}
+              />
+            ) : openedHtmlFile ? (
+              <HtmlViewer 
+                filePath={openedHtmlFile}
+                onClose={() => setOpenedHtmlFile(null)}
               />
             ) : editorType === 'grafcet' ? (
               <>
@@ -562,7 +591,7 @@ const MainApp: React.FC = () => {
             {showWelcome && <WelcomeScreen onClose={handleWelcomeClose} onSelectEditor={handleEditorSelect} />}
           </MainContent>
         </EditorContainer>
-        <VibeSidebar isOpen={vibeSidebarOpen} onClose={() => setVibeSidebarOpen(false)} />
+        {!showWelcome && <VibeSidebar isOpen={vibeSidebarOpen} onClose={() => setVibeSidebarOpen(false)} />}
       </EditorLayout>
       <PopupManager />
       <Toast />

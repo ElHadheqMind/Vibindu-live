@@ -351,55 +351,27 @@ router.post('/load-diagram', async (req, res) => {
       });
     }
 
-    try {
-      console.log(`[load-diagram] Absolute path: "${diagramPath}"`);
-      // 1. Try to resolve as relative path (Flydrive/Storage)
-      const relativePath = storage.getRelativePath(diagramPath);
-      console.log(`[load-diagram] Resolved relative path: "${relativePath}"`);
+    console.log(`[load-diagram] Path: "${diagramPath}"`);
 
-      // Validate path exists in storage
-      if (!await storage.exists(relativePath)) {
-        console.warn(`[load-diagram] File NOT FOUND at: "${relativePath}"`);
-        return res.status(404).json({ success: false, error: `Diagram file not found: ${relativePath}` });
-      }
-
-      // Check file extension
-      const lowerPath = relativePath.toLowerCase();
-      if (!lowerPath.endsWith('.json') && !lowerPath.endsWith('.sfc') && !lowerPath.endsWith('.gsrsm')) {
-        return res.status(400).json({ success: false, error: 'Only .sfc, .gsrsm and .json diagram files are supported' });
-      }
-
-      const diagramData = await storage.readJson(relativePath);
-      console.log(`[load-diagram] Successfully loaded: "${relativePath}"`);
-
-      res.json({
-        success: true,
-        diagram: diagramData
-      });
-      return; // Return to avoid falling through
-
-    } catch (storageError: any) {
-      // 2. Fallback: If path is external to storage root (Local Desktop scenario)
-      if (path.isAbsolute(diagramPath)) {
-        const lowerPath = diagramPath.toLowerCase();
-        if (!lowerPath.endsWith('.json') && !lowerPath.endsWith('.sfc') && !lowerPath.endsWith('.gsrsm')) {
-          return res.status(400).json({ success: false, error: 'Only .sfc, .gsrsm and .json diagram files are supported' });
-        }
-
-        const fs = await import('fs/promises');
-        try {
-          const content = await fs.readFile(diagramPath, 'utf-8');
-          const diagramData = JSON.parse(content);
-          return res.json({ success: true, diagram: diagramData });
-        } catch (fsError) {
-          return res.status(404).json({ success: false, error: `Diagram file not found (external): ${diagramPath}` });
-        }
-      } else {
-        throw storageError;
-      }
+    // Validate path exists (StorageService now handles absolute/relative transparently)
+    if (!await storage.exists(diagramPath)) {
+      console.warn(`[load-diagram] File NOT FOUND: "${diagramPath}"`);
+      return res.status(404).json({ success: false, error: `Diagram file not found: ${diagramPath}` });
     }
 
-    // Response handled inside try/catch blocks
+    // Check file extension
+    const lowerPath = diagramPath.toLowerCase();
+    if (!lowerPath.endsWith('.json') && !lowerPath.endsWith('.sfc') && !lowerPath.endsWith('.gsrsm')) {
+      return res.status(400).json({ success: false, error: 'Only .sfc, .gsrsm and .json diagram files are supported' });
+    }
+
+    const diagramData = await storage.readJson(diagramPath);
+    console.log(`[load-diagram] Successfully loaded: "${diagramPath}"`);
+
+    res.json({
+      success: true,
+      diagram: diagramData
+    });
   } catch (error) {
     console.error('Error in load diagram route:', error);
     res.status(500).json({
@@ -431,10 +403,8 @@ router.post('/save-diagram', async (req, res) => {
       });
     }
 
-    const relativePath = storage.getRelativePath(diagramPath);
-
     // Check if it's a supported diagram file (.json or .grafcet)
-    const lowerPath = relativePath.toLowerCase();
+    const lowerPath = diagramPath.toLowerCase();
     if (!lowerPath.endsWith('.json') && !lowerPath.endsWith('.sfc') && !lowerPath.endsWith('.gsrsm')) {
       return res.status(400).json({
         success: false,
@@ -443,7 +413,7 @@ router.post('/save-diagram', async (req, res) => {
     }
 
     // Ensure the directory exists
-    const dirPath = path.dirname(relativePath);
+    const dirPath = path.dirname(diagramPath);
     await storage.ensureDirectory(dirPath);
 
     // Add timestamp to diagram
@@ -455,11 +425,11 @@ router.post('/save-diagram', async (req, res) => {
 
     // Write the diagram file
     try {
-      await storage.writeJson(relativePath, diagramWithTimestamp);
+      await storage.writeJson(diagramPath, diagramWithTimestamp);
 
       res.json({
         success: true,
-        savedPath: storage.getAbsolutePath(relativePath)
+        savedPath: path.isAbsolute(diagramPath) ? diagramPath : storage.getAbsolutePath(diagramPath)
       });
     } catch (writeError) {
       console.error('Error writing diagram file:', writeError);
@@ -664,9 +634,36 @@ router.get('/tree', async (req, res) => {
     console.log(`[/tree] normalizedRootRel: "${normalizedRootRel}"`);
 
     // 1. Create nodes and fill lookup table
+    // We must synthesize directories because GCS listAll returning recursive objects 
+    // often ONLY returns files, not the intermediate directory objects.
+
+    // A helper to ensure a directory exists in the lookup
+    const ensureDirectoryNode = (dirPathRel: string) => {
+      if (!dirPathRel || dirPathRel === '.' || dirPathRel === normalizedRootRel) return;
+      if (!lookup[dirPathRel]) {
+        lookup[dirPathRel] = {
+          name: path.basename(dirPathRel),
+          path: storage.getAbsolutePath(dirPathRel),
+          type: 'folder',
+          children: [],
+          isExpanded: false,
+          _rel: dirPathRel
+        };
+        // Also ensure its parent exists
+        const parentPath = path.dirname(dirPathRel).replace(/\\/g, '/').replace(/^\./, '');
+        ensureDirectoryNode(parentPath);
+      }
+    };
+
     items.forEach(item => {
-      if (item.name === '.keep') return;
       const p = item.path.replace(/\\/g, '/');
+      const parentPath = path.dirname(p).replace(/\\/g, '/').replace(/^\./, '');
+
+      // Always ensure the parent directory of this item exists
+      ensureDirectoryNode(parentPath);
+
+      if (item.name === '.keep') return; // Skip adding the .keep file itself
+
       lookup[p] = {
         name: item.name,
         path: storage.getAbsolutePath(item.path),
@@ -687,7 +684,11 @@ router.get('/tree', async (req, res) => {
       if (isDirectChild) {
         tree.push(node);
       } else if (lookup[parentPath]) {
+        if (!lookup[parentPath].children) lookup[parentPath].children = [];
         lookup[parentPath].children.push(node);
+      } else {
+        // Fallback if parent still somehow missing (shouldn't happen with ensureDirectoryNode)
+        tree.push(node);
       }
     });
 
@@ -874,45 +875,28 @@ router.post('/read-text', async (req, res) => {
       });
     }
 
-    // Check if this is within storage or external
-    const basePath = storage.getBasePath();
-    const isWithinStorage = filePath.startsWith(basePath) || !path.isAbsolute(filePath);
-
-    if (isWithinStorage) {
-      const relativePath = storage.getRelativePath(filePath);
-
-      // Check if file exists
-      if (!await storage.exists(relativePath)) {
+    // Read file content (StorageService now handles internal/external transparently)
+    try {
+      if (!await storage.exists(filePath)) {
         return res.status(404).json({
           success: false,
           error: 'File not found'
         });
       }
 
-      // Read file content
-      const content = await storage.readFile(relativePath);
+      const content = await storage.readFile(filePath);
 
       res.json({
         success: true,
         content,
         filePath
       });
-    } else {
-      // External file - read directly
-      const fs = await import('fs/promises');
-      try {
-        const content = await fs.readFile(filePath, 'utf-8');
-        res.json({
-          success: true,
-          content,
-          filePath
-        });
-      } catch (fsError) {
-        return res.status(404).json({
-          success: false,
-          error: `File not found: ${filePath}`
-        });
-      }
+    } catch (readError) {
+      console.error('Error reading text file:', readError);
+      return res.status(404).json({
+        success: false,
+        error: `File not found or unreadable: ${filePath}`
+      });
     }
   } catch (error) {
     console.error('Error reading text file:', error);
@@ -951,7 +935,9 @@ router.post('/read-media', async (req, res) => {
       '.mp4': 'video/mp4',
       '.webm': 'video/webm',
       '.mov': 'video/quicktime',
-      '.avi': 'video/x-msvideo'
+      '.avi': 'video/x-msvideo',
+      '.wav': 'audio/wav',
+      '.mp3': 'audio/mpeg'
     };
 
     const mimeType = mimeTypes[ext];
@@ -962,36 +948,29 @@ router.post('/read-media', async (req, res) => {
       });
     }
 
-    const fs = await import('fs/promises');
-    const basePath = storage.getBasePath();
-    const isWithinStorage = filePath.startsWith(basePath) || !path.isAbsolute(filePath);
-
     let fileBuffer: Buffer;
+    const fs = await import('fs/promises');
 
-    if (isWithinStorage) {
-      const relativePath = storage.getRelativePath(filePath);
-
+    try {
       // Check if file exists
-      if (!await storage.exists(relativePath)) {
+      if (!await storage.exists(filePath)) {
         return res.status(404).json({
           success: false,
           error: 'File not found'
         });
       }
 
-      // Read file as buffer using storage service
-      const absolutePath = path.join(basePath, relativePath);
+      // Read file as buffer
+      // For local driver, we can use fs.readFile directly even for absolute external paths
+      // If within storage, we can construct the absolute path
+      const absolutePath = path.isAbsolute(filePath) ? filePath : storage.getAbsolutePath(filePath);
       fileBuffer = await fs.readFile(absolutePath);
-    } else {
-      // External file - read directly
-      try {
-        fileBuffer = await fs.readFile(filePath);
-      } catch (fsError) {
-        return res.status(404).json({
-          success: false,
-          error: `File not found: ${filePath}`
-        });
-      }
+    } catch (readError) {
+      console.error('Error reading media file:', readError);
+      return res.status(404).json({
+        success: false,
+        error: `File not found or unreadable: ${filePath}`
+      });
     }
 
     // Convert to base64 data URL

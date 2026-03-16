@@ -1,6 +1,8 @@
 import React from 'react';
 import { Group, Arrow, Text } from 'react-konva';
 import { useTheme } from '../../context/ThemeContext';
+import { Gsrsm_CONDITION_FONT_SIZE } from '../../models/constants';
+
 
 interface GsrsmConnectionProps {
   points: number[];
@@ -81,9 +83,9 @@ const GsrsmConnection: React.FC<GsrsmConnectionProps> = ({
     return dash; // Use provided dash for activated connections
   };
 
-  // Keep full opacity for all connections - use color differentiation instead
-  // This prevents deactivated connections from appearing gray
-  const opacity = 1;
+  // Use 50% opacity for deactivated connections as requested
+  const opacity = activated ? 1 : 0.5;
+
 
   const lineColor = getLineColor();
 
@@ -161,11 +163,12 @@ const GsrsmConnection: React.FC<GsrsmConnectionProps> = ({
             text={condition}
             x={-(condition.length * 3.5)}
             y={-20}
-            fontSize={11}
+            fontSize={activated ? Gsrsm_CONDITION_FONT_SIZE : Gsrsm_CONDITION_FONT_SIZE - 2}
             fontStyle="bold"
             fill={lineColor}
             align="center"
           />
+
         </Group>
       )}
     </Group>

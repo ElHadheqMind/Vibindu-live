@@ -341,28 +341,42 @@ export const useSimulationStore = create<SimulationState>((set, get) => ({
     },
 
     saveSimulation: async () => {
-        const project = useProjectStore.getState().getCurrentProject();
+        // Get project path from EITHER store (Grafcet or GSRSM)
+        let projectPath: string | null = null;
 
-        if (!project) {
-            console.warn('⚠️ Cannot save simulation: No current project');
-            return;
+        const grafcetProject = useProjectStore.getState().getCurrentProject();
+        if (grafcetProject?.localPath) {
+            projectPath = grafcetProject.localPath;
         }
 
-        if (!project.localPath) {
-            console.warn('⚠️ Cannot save simulation: Project has no localPath', { projectName: project.name, projectId: project.id });
+        // Fallback: check GSRSM store
+        if (!projectPath) {
+            try {
+                const { useGsrsmStore } = await import('./useGsrsmStore');
+                const gsrsmProject = useGsrsmStore.getState().project;
+                if (gsrsmProject?.localPath) {
+                    projectPath = gsrsmProject.localPath;
+                }
+            } catch (e) {
+                // Ignore import errors
+            }
+        }
+
+        if (!projectPath) {
+            console.warn('⚠️ Cannot save simulation: No active project with localPath');
             return;
         }
 
         const { variables, actions } = get();
         console.log('💾 Saving simulation configuration...', {
-            projectPath: project.localPath,
+            projectPath,
             variableCount: variables.length,
             actionCount: actions.length
         });
 
         try {
             const { ApiService } = await import('../services/apiService');
-            const result = await ApiService.saveSimulation(project.localPath!, { variables, actions });
+            const result = await ApiService.saveSimulation(projectPath, { variables, actions });
 
             if (result.success) {
                 console.log('✅ Simulation configuration saved to:', result.savedPath);

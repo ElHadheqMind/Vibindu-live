@@ -21,6 +21,8 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+BACKEND_URL = os.getenv("BACKEND_URL", "http://backend:3001" if os.getenv("IS_DOCKER", "false").lower() == "true" else "http://localhost:3001")
+STORAGE_PATH = os.getenv("STORAGE_PATH", "")
 
 class GetSFCContentTool(BaseTool):
     """Retrieves SFC file content from the file system or backend.
@@ -29,7 +31,7 @@ class GetSFCContentTool(BaseTool):
     Reads from: tool_context.state['sfc_files'], tool_context.state['project_path']
     """
 
-    def __init__(self, api_base: str = "http://localhost:3001/api"):
+    def __init__(self, api_base: str = f"{BACKEND_URL}/api"):
         super().__init__(
             name="GetSFCContent",
             description="Retrieves SFC file content (JSON diagram) for a specific mode and file. Use this to get the SFC structure before running simulation.",
@@ -101,6 +103,9 @@ class GetSFCContentTool(BaseTool):
                 os.path.join("users", file_path),
                 os.path.join("..", "users", file_path),
             ]
+            # Add STORAGE_PATH-based path for Docker
+            if STORAGE_PATH:
+                possible_paths.insert(0, os.path.join(STORAGE_PATH, file_path))
             
             sfc_content = None
             actual_path = None

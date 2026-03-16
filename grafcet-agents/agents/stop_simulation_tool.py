@@ -1,14 +1,16 @@
 import aiohttp
 import logging
+import os
 from base_tool import BaseTool
 
 logger = logging.getLogger(__name__)
 
+BACKEND_URL = os.getenv("BACKEND_URL", "http://backend:3001" if os.getenv("IS_DOCKER", "false").lower() == "true" else "http://localhost:3001")
 
 class StopSimulationTool(BaseTool):
     """Stops the currently running simulation and closes the simulation panel."""
 
-    def __init__(self, api_base: str = "http://localhost:3001/api/simulation"):
+    def __init__(self, api_base: str = f"{BACKEND_URL}/api/simulation"):
         super().__init__(
             name="StopSimulation",
             description="Stops the currently running simulation and closes the simulation panel.",

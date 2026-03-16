@@ -6,8 +6,8 @@ export const DEFAULT_GATE_SIZE = { width: 40, height: 8 }; // Reduced from 60x10
 
 // Spacing between elements in guided mode
 export const GUIDED_STEP_SPACING_VERTICAL = 140; // Normal vertical spacing
-export const GUIDED_STEP_SPACING_HORIZONTAL = 300; // Increased horizontal spacing (was 240)
-export const GUIDED_DIVERGENCE_SPACING = 200; // Increased divergence spacing (was 160)
+export const GUIDED_STEP_SPACING_HORIZONTAL = 400; // Updated to 400
+export const GUIDED_DIVERGENCE_SPACING = 400; // Updated to 400
 
 // Divergence-aware spacing: when divergence is between step and transition
 // Double the distance and place divergence gate in the middle

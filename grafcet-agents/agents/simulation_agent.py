@@ -428,7 +428,7 @@ class SimulationAgentLoop:
         project_path: str,
         io_context: Dict[str, Any],
         gsrsm_context: Dict[str, Any],
-        api_base: str = "http://localhost:3001/api/simulation"
+        api_base: str = None
     ):
         """
         Initialize the simulation agent loop.
@@ -442,7 +442,7 @@ class SimulationAgentLoop:
         self.project_path = project_path
         self.io_context = io_context
         self.gsrsm_context = gsrsm_context
-        self.api_base = api_base
+        self.api_base = api_base or os.getenv("BACKEND_URL", "http://backend:3001" if os.getenv("IS_DOCKER", "false").lower() == "true" else "http://localhost:3001") + "/api/simulation"
 
         # Extract available variables and actions
         self.available_variables = self._extract_variable_names()
@@ -480,6 +480,11 @@ class SimulationAgentLoop:
         file_path = os.path.join(
             self.project_path, "modes", mode_id, "default.sfc"
         )
+
+        # Resolve against STORAGE_PATH for Docker
+        storage_path = os.getenv("STORAGE_PATH", "")
+        if storage_path:
+            file_path = os.path.join(storage_path, file_path)
 
         try:
             if os.path.exists(file_path):

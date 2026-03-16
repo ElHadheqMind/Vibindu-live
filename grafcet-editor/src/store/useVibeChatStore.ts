@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import { useAutoSaveStore } from './useAutoSaveStore';
+import { API_BASE_URL } from '../config';
 
 // API base URL for VibIndu chat endpoints
-const API_BASE = 'http://localhost:3001/api/vibe';
+const API_BASE = `${API_BASE_URL}/vibe`;
 
 // Helper to get headers with auth token (matching apiService.ts pattern)
 const getAuthHeaders = (): HeadersInit => {
@@ -47,9 +48,10 @@ export interface VibeChatMessage {
     toolParams?: Record<string, unknown>;
     isToolResult?: boolean;
     toolResult?: Record<string, unknown>;
-    // Render results (image/video)
+    // Render results (image/video/audio)
     imageData?: string;  // Base64 encoded image data
     videoUrl?: string;   // Video URL for playback
+    audioData?: string;  // Base64 encoded audio data
 }
 
 /**
@@ -182,7 +184,7 @@ export const useVibeChatStore = create<VibeChatState>((set, get) => ({
             updatedAt: now,
             messages: [],
             metadata: {
-                model: metadata?.model || 'gemini-3-pro-preview',
+                model: metadata?.model || 'gemini-3.1-pro-preview',
                 mode: metadata?.mode || 'fast',
                 thinkingLevel: metadata?.thinkingLevel || 2,
             }

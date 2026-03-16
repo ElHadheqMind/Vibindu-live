@@ -19,6 +19,41 @@ export class StorageService {
     }
 
     /**
+     * Determine if a path is absolute (supports both Windows and Linux formats cross-platform)
+     */
+    private isPathAbsolute(p: string): boolean {
+        if (!p) return false;
+        // Normalize slashes for testing
+        const normalized = p.replace(/\\/g, '/');
+        // Linux/Unix absolute path (starts with /)
+        if (normalized.startsWith('/')) return true;
+        // Windows absolute path (starts with Drive Letter like C: or // for networks)
+        if (/^[a-zA-Z]:/.test(normalized) || normalized.startsWith('//')) return true;
+        // Node's default path.isAbsolute(p) - might work for current platform
+        return path.isAbsolute(p);
+    }
+
+    /**
+     * Check if a path is within the base storage directory
+     */
+    private isInternalPath(filePath: string): boolean {
+        if (!this.isPathAbsolute(filePath)) return true;
+
+        const normalize = (p: string) => {
+            let normalized = p.replace(/\\/g, '/');
+            if (process.platform === 'win32' && normalized.match(/^[a-zA-Z]:/)) {
+                normalized = normalized[0].toUpperCase() + normalized.slice(1);
+            }
+            return normalized;
+        };
+
+        const normalizedBase = normalize(this.basePath);
+        const normalizedTarget = normalize(filePath);
+
+        return normalizedTarget.startsWith(normalizedBase);
+    }
+
+    /**
      * Resolves a path for Flydrive
      * Ensures we always work with relative paths relative to the storage root
      */
@@ -28,17 +63,48 @@ export class StorageService {
         }
 
         // If it's already a relative path, ensure it's clean and has no leading slash
-        if (!path.isAbsolute(filePath)) {
+        if (!this.isPathAbsolute(filePath)) {
             const sanitized = filePath.replace(/\\/g, '/').replace(/^\//, '');
-            // Prevent traversal even in relative paths passed from outside
+            // Prevent traversal - only block if it's actually trying to go ABOVE the root
+            // But we can be more specific: if it's a relative path starting with ../ and we are using local driver,
+            // we might want to allow it if it was properly resolved. 
+            // However, to be safe, we keep the block but only if it's truly problematic.
             if (sanitized.startsWith('..') || sanitized.includes('/../')) {
-                throw new Error('E_PATH_TRAVERSAL_DETECTED');
+                // Special check: if it's for local driver and it's an absolute path that got misidentified, we might let it through
+                // but usually, it's safer to block.
+                throw new Error(`E_PATH_TRAVERSAL_DETECTED: Path "${filePath}" contains traversal segments`);
             }
             return sanitized;
         }
 
-        // If it's absolute, try to make it relative to base path
-        return this.getRelativePath(filePath);
+        // If it's absolute, check if it's within base path
+        if (this.isInternalPath(filePath)) {
+            return this.getRelativePath(filePath);
+        }
+
+        // If it's external, only allow it if we are using the local driver
+        if (getStorageDriver() === 'local') {
+            // Special case: Windows path on Linux - try to map it using getRelativePath
+            if (process.platform !== 'win32' && /^[a-zA-Z]:/.test(filePath)) {
+                try {
+                    const mapped = this.getRelativePath(filePath);
+                    if (mapped && !this.isPathAbsolute(mapped)) {
+                        return mapped;
+                    }
+                } catch (e) {
+                    // Ignore and use fallback
+                }
+            }
+            
+            // Fallback: return as-is but with forward slashes and NO COLON if on Linux
+            let result = filePath.replace(/\\/g, '/');
+            if (process.platform !== 'win32') {
+                result = result.replace(/:/g, '_');
+            }
+            return result;
+        }
+
+        throw new Error('E_PATH_TRAVERSAL_DETECTED: Absolute path outside storage root is not allowed for cloud drivers');
     }
 
     /**
@@ -46,6 +112,13 @@ export class StorageService {
      */
     async writeJson(filePath: string, data: any): Promise<void> {
         const content = JSON.stringify(data, null, 2);
+
+        if (getStorageDriver() === 'local' && !this.isInternalPath(filePath) && this.isPathAbsolute(filePath)) {
+            const resolved = filePath.replace(/\\/g, '/');
+            await fs.promises.writeFile(resolved, content);
+            return;
+        }
+
         const resolvedPath = this.resolvePath(filePath);
         await this.disk.put(resolvedPath, content);
     }
@@ -54,6 +127,12 @@ export class StorageService {
      * Read a JSON file from storage
      */
     async readJson<T = any>(filePath: string): Promise<T> {
+        if (getStorageDriver() === 'local' && !this.isInternalPath(filePath) && this.isPathAbsolute(filePath)) {
+            const resolved = filePath.replace(/\\/g, '/');
+            const content = await fs.promises.readFile(resolved, 'utf-8');
+            return JSON.parse(content);
+        }
+
         const resolvedPath = this.resolvePath(filePath);
         const content = await this.disk.get(resolvedPath);
         return JSON.parse(content.toString());
@@ -63,6 +142,12 @@ export class StorageService {
      * Write a text file to storage
      */
     async writeFile(filePath: string, content: string | Buffer): Promise<void> {
+        if (getStorageDriver() === 'local' && !this.isInternalPath(filePath) && this.isPathAbsolute(filePath)) {
+            const resolved = filePath.replace(/\\/g, '/');
+            await fs.promises.writeFile(resolved, content);
+            return;
+        }
+
         const resolvedPath = this.resolvePath(filePath);
         await this.disk.put(resolvedPath, content);
     }
@@ -79,6 +164,12 @@ export class StorageService {
      * Read a text file from storage
      */
     async readFile(filePath: string): Promise<string> {
+        if (getStorageDriver() === 'local' && !this.isInternalPath(filePath) && this.isPathAbsolute(filePath)) {
+            const resolved = filePath.replace(/\\/g, '/');
+            const content = await fs.promises.readFile(resolved, 'utf-8');
+            return content;
+        }
+
         const resolvedPath = this.resolvePath(filePath);
         const content = await this.disk.get(resolvedPath);
         return content.toString();
@@ -107,10 +198,18 @@ export class StorageService {
 
             // For cloud drivers, "directories" often don't exist unless they have children.
             // We can try to list one item.
-            const list = this.disk.listAll(resolvedPath);
-            // @ts-ignore
-            for await (const obj of list) {
-                return true; // Found at least one item inside, so it "exists" as a prefix
+            const listRes = await this.disk.listAll(resolvedPath);
+            // Flydrive 1.3 returns an object with 'objects'
+            if (listRes && listRes.objects) {
+                const items = Array.from(listRes.objects);
+                if (items.length > 0) return true;
+            }
+
+            // In case it's an iterable (future version or local driver quirk)
+            if (listRes && typeof (listRes as any)[Symbol.asyncIterator] === 'function') {
+                for await (const obj of listRes as any) {
+                    return true;
+                }
             }
 
             return false;
@@ -175,13 +274,42 @@ export class StorageService {
             }
 
             // Delete everything with this prefix (recursive)
-            // @ts-ignore - disk.listAll is available in Flydrive V3
-            const list = this.disk.listAll(resolvedPath);
-            // @ts-ignore
-            for await (const obj of list) {
-                const itemPath = obj.path || obj.key || obj.prefix;
+            if (getStorageDriver() === 'gcs') {
+               // Fast path for GCS: Use native prefix deletion if available, or just delete by prefix manually
+               try {
+                   // @ts-ignore
+                   const storage = this.disk.driver['storage'] || this.disk.driver['#storage'] || this.disk.driver._storage;
+                   if (storage && typeof storage.bucket === 'function') {
+                      const bucketName = process.env.GCS_BUCKET || 'vibindu-storage';
+                      const bucket = storage.bucket(bucketName);
+                      const prefixPath = resolvedPath.endsWith('/') ? resolvedPath : `${resolvedPath}/`;
+                      await bucket.deleteFiles({ prefix: prefixPath, force: true });
+                      return;
+                   }
+               } catch(ex) {
+                   console.warn('[StorageService] Fast path GCS prefix deletion failed, falling back to iteration', ex);
+               }
+            }
+
+            const listRes = await this.disk.listAll(resolvedPath, { recursive: true });
+            const items = listRes && listRes.objects ? Array.from(listRes.objects) : [];
+            
+            for (const obj of items) {
+                const itemObj = obj as any;
+                const itemPath = itemObj.path || itemObj.key || itemObj.prefix || itemObj.name;
                 if (itemPath) {
                     await this.disk.delete(itemPath);
+                }
+            }
+            
+            // In case it's an iterable (future version or local driver quirk)
+            if (listRes && typeof (listRes as any)[Symbol.asyncIterator] === 'function') {
+                for await (const obj of listRes as any) {
+                    const itemObj = obj as any;
+                    const itemPath = itemObj.path || itemObj.key || itemObj.prefix || itemObj.name;
+                    if (itemPath) {
+                        await this.disk.delete(itemPath);
+                    }
                 }
             }
         } catch (error) {
@@ -252,23 +380,41 @@ export class StorageService {
                 }
             }
 
+            // Flydrive 1.x only has listAll, which behaves non-recursively by default 
+            // unless options like {recursive: true} are passed or it's implicitly supported
             // @ts-ignore
-            const result = recursive ? this.disk.listAll(resolvedPath) : this.disk.list(resolvedPath);
+            const resultPromise = this.disk.listAll(resolvedPath, { recursive });
+            let result = await resultPromise;
+            
             const objects = [];
 
-            // Flydrive V3 disk.listAll() returns an AsyncIterable
-            // @ts-ignore
-            for await (const obj of result) {
-                objects.push(obj);
+            if (result && result.objects) {
+                objects.push(...Array.from(result.objects));
+            } else if (Array.isArray(result)) {
+                objects.push(...result);
+            } else if (result && typeof (result as any)[Symbol.iterator] === 'function') {
+                objects.push(...Array.from(result as any));
+            } else if (result && typeof (result as any)[Symbol.asyncIterator] === 'function') {
+                for await (const obj of result as any) {
+                    objects.push(obj);
+                }
             }
 
             return objects.map((obj: any) => {
-                const isDir = obj.isDirectory || obj.type === 'directory';
+                const isDir = obj.isDirectory === true || obj.type === 'directory';
+                let itemPath = obj.path || obj.key || obj.prefix || '';
+                
+                // GCS DriveDirectory returns `prefix` with a trailing slash!
+                // We MUST strip it, otherwise path.dirname() in the file tree builder mismatches keys and orphans files!
+                if (isDir && itemPath.endsWith('/')) {
+                    itemPath = itemPath.slice(0, -1);
+                }
+
                 return {
-                    name: obj.name || path.basename(obj.path),
-                    path: obj.path || obj.key || obj.prefix,
+                    name: obj.name || path.basename(itemPath),
+                    path: itemPath,
                     isDirectory: isDir,
-                    size: obj.size || obj.contentLength
+                    size: obj.size || obj.contentLength || 0
                 };
             });
         } catch (error) {
@@ -281,6 +427,14 @@ export class StorageService {
      * Create a directory (ensuring parent directories exist)
      */
     async ensureDirectory(directoryPath: string): Promise<void> {
+        if (getStorageDriver() === 'local' && !this.isInternalPath(directoryPath) && this.isPathAbsolute(directoryPath)) {
+            const resolved = directoryPath.replace(/\\/g, '/');
+            if (!fs.existsSync(resolved)) {
+                fs.mkdirSync(resolved, { recursive: true });
+            }
+            return;
+        }
+
         const resolvedPath = this.resolvePath(directoryPath);
         // In Flydrive, directories are created implicitly when files are written
         // We'll create a .keep file to ensure the directory exists
@@ -370,19 +524,88 @@ export class StorageService {
         const normalizedTarget = normalize(absolutePath);
 
         // If it's already relative, just return it sanitized
-        if (!path.isAbsolute(absolutePath)) {
+        if (!this.isPathAbsolute(absolutePath)) {
             return normalizedTarget;
         }
 
+        // Detect if our basePath is a Windows path on Linux - this is a configuration error
+        // but we can try to work around it by stripping the drive letter.
+        let effectiveBase = normalizedBase;
+        if (process.platform !== 'win32' && /^[a-zA-Z]:/.test(normalizedBase)) {
+            console.warn(`[StorageService] CRITICAL: basePath is a Windows path on Linux: ${normalizedBase}`);
+            effectiveBase = normalizedBase.substring(2);
+            if (!effectiveBase.startsWith('/')) effectiveBase = '/' + effectiveBase;
+        }
+
+        // Special case: Windows path on a non-Windows platform (Docker/Linux)
+        if (process.platform !== 'win32' && /^[a-zA-Z]:/.test(normalizedTarget)) {
+            console.log(`[StorageService] Detected Windows path on Linux: ${normalizedTarget}`);
+            
+            // 1. Try to find if it matches the current storage structure
+            // Example: Host path C:/Users/pc/data/Project1 vs Container path /app/data
+            // If they share "data" segment, we can extract the relative part.
+            const baseSegments = normalizedBase.split('/').filter(Boolean);
+            const lastBaseSegment = baseSegments[baseSegments.length - 1]; // e.g. "data"
+            
+            if (lastBaseSegment) {
+                const targetSegments = normalizedTarget.split('/').filter(Boolean);
+                const matchIndex = targetSegments.lastIndexOf(lastBaseSegment);
+                
+                if (matchIndex !== -1 && matchIndex < targetSegments.length - 1) {
+                    const relativeFromMatch = targetSegments.slice(matchIndex + 1).join('/');
+                    console.log(`[StorageService] Successfully mapped Windows path via segment "${lastBaseSegment}": ${relativeFromMatch}`);
+                    return relativeFromMatch;
+                }
+            }
+            
+            // 2. Fallback: If no segment match, strip drive letter and try path.relative
+            // This might still result in .. but it's better than a colon
+            const strippedTarget = normalizedTarget.substring(2);
+            const relative = path.relative(normalizedBase, strippedTarget);
+            return relative.replace(/\\/g, '/').replace(/:/g, '_');
+        }
+
+        // Special case: Linux-style absolute path on Windows (often from Docker DB or frontend)
+        if (process.platform === 'win32' && normalizedTarget.startsWith('/')) {
+            console.log(`[StorageService] Detected Linux-style path on Windows: ${normalizedTarget}`);
+
+            // 1. If it starts with /app/data, map it to our current base path
+            // /app/data is the standard container path used in our Dockerfile
+            if (normalizedTarget.startsWith('/app/data')) {
+                const relativeToAppLogData = normalizedTarget.substring('/app/data'.length).replace(/^\//, '');
+                console.log(`[StorageService] Mapping /app/data to basePath: ${relativeToAppLogData}`);
+                return relativeToAppLogData;
+            }
+
+            // 2. Try to find if it matches the current storage structure by segment
+            const baseSegments = effectiveBase.split('/').filter(Boolean);
+            const lastBaseSegment = baseSegments[baseSegments.length - 1]; // e.g. "GrafcetProjects" or "data"
+
+            if (lastBaseSegment) {
+                const targetSegments = normalizedTarget.split('/').filter(Boolean);
+                const matchIndex = targetSegments.lastIndexOf(lastBaseSegment);
+
+                if (matchIndex !== -1 && matchIndex < targetSegments.length - 1) {
+                    const relativeFromMatch = targetSegments.slice(matchIndex + 1).join('/');
+                    console.log(`[StorageService] Successfully mapped Linux path via segment "${lastBaseSegment}": ${relativeFromMatch}`);
+                    return relativeFromMatch;
+                }
+            }
+        }
+
         // Use Node's path.relative to handle cross-platform logic
-        const relative = path.relative(normalizedBase, normalizedTarget);
-        console.log(`[StorageService] getRelativePath: Base="${normalizedBase}", Target="${normalizedTarget}", Result="${relative}"`);
+        const relative = path.relative(effectiveBase, normalizedTarget);
+        console.log(`[StorageService] getRelativePath: Base="${effectiveBase}", Target="${normalizedTarget}", Result="${relative}"`);
 
         // If the relative path starts with .. it means it's outside the base path
         if (relative.startsWith('..') || path.isAbsolute(relative)) {
-            console.warn(`[StorageService] Attempted to access path outside base storage: ${absolutePath}`);
-            console.warn(`[StorageService] Base: ${normalizedBase}, Target: ${normalizedTarget}, Relative: ${relative}`);
-            throw new Error('E_PATH_TRAVERSAL_DETECTED');
+            // Only throw error if we are NOT on local driver OR it's truly malicious traversal
+            // (on local driver, we allow absolute paths outside base but not /../ traversal)
+            if (getStorageDriver() !== 'local') {
+                console.warn(`[StorageService] Attempted to access path outside base storage: ${absolutePath}`);
+                console.warn(`[StorageService] Base: ${normalizedBase}, Target: ${normalizedTarget}, Relative: ${relative}`);
+                throw new Error('E_PATH_TRAVERSAL_DETECTED');
+            }
         }
 
         // Convert to forward slashes for Flydrive

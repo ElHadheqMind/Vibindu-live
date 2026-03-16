@@ -1716,7 +1716,7 @@ const GuidedPositions: React.FC<GuidedPositionsProps> = ({ step }) => {
     );
   };
 
-  // Render the "Close GRAFCET" button near the initial step
+  // Render the "Close SFC" button near the initial step
   const renderCloseGrafcetButton = () => {
     // Only show this button if the current step is not the initial step
     if (step.stepType === 'initial') return null;
@@ -1731,7 +1731,7 @@ const GuidedPositions: React.FC<GuidedPositionsProps> = ({ step }) => {
         y={initialStep.position.y}
         width={DEFAULT_STEP_SIZE.width * 3}
         height={DEFAULT_STEP_SIZE.height}
-        text="Close GRAFCET"
+        text="Close SFC"
         icon="⟲"
         fontSize={14}
         fill="#673ab7"
@@ -1755,7 +1755,7 @@ const GuidedPositions: React.FC<GuidedPositionsProps> = ({ step }) => {
       {/* Render suggestions for multiple active steps */}
       {renderMultiStepSuggestions()}
 
-      {/* Render the Close GRAFCET button */}
+      {/* Render the Close SFC button */}
       {renderCloseGrafcetButton()}
 
       {/* Divergence Build Button - positioned very close to the step to quickly start divergence mode */}

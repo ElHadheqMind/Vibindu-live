@@ -1,18 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
 import styled from 'styled-components';
 import { useNavigate } from 'react-router-dom';
-import { FiX, FiSend, FiPaperclip, FiPlus, FiClock, FiMessageSquare, FiChevronLeft, FiChevronDown, FiTrash2 } from 'react-icons/fi';
+import { FiX, FiSend, FiPaperclip, FiPlus, FiClock, FiChevronLeft, FiChevronDown, FiTrash2 } from 'react-icons/fi';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useProjectStore } from '../store/useProjectStore';
 import { useSimulationStore } from '../store/useSimulationStore';
 import { useGsrsmFileStore } from '../store/useGsrsmFileStore';
 import { useGsrsmStore } from '../store/useGsrsmStore';
+import { useFileExplorerStore } from '../store/useFileExplorerStore';
 import { useVibeChatStore } from '../store/useVibeChatStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { ApiService } from '../services/apiService';
-import { GrafcetProject } from '../models/types';
 import { StreamingText } from './StreamingText';
+import SfcThumbnailRenderer from './Vibe/SfcThumbnailRenderer';
+import { LiveAgentMode } from './Vibe/LiveAgentMode';
+import { ComputerAgentMode } from './Vibe/ComputerAgentMode';
+import { StorytellerMode } from './Vibe/StorytellerMode';
+import { API_BASE_URL, AGENTS_BASE_URL } from '../config';
 
 // Light Theme Colors (matching app theme)
 const THEME = {
@@ -589,7 +594,10 @@ const DEFAULT_VIBE_PROMPT = `Build the complete automation project from the uplo
 1. Extract I/O Configuration - Identify all inputs (sensors, buttons, switches) and outputs (motors, valves, indicators) with their addresses and descriptions
 2. Design GSRSM Modes - Create the operating modes structure following IEC 61131-3 GEMMA standard (Initial Stop, Production, Emergency, etc.)
 3. Generate Conduct SFC - Build the main coordination chart that manages transitions between all operating modes
-4. Generate Mode SFCs - Create individual Sequential Function Charts for each operating mode with proper steps, transitions and actions`;
+4. Generate Mode SFCs - Create individual Sequential Function Charts for each operating mode with proper steps, transitions and actions
+
+if spec in frensh all output should be in frensh
+if english output english`;
 
 // Default simulation prompt - simulates A1 mode by default
 const DEFAULT_SIMULATION_PROMPT = `Run simulation on the SFC file to validate its behavior.
@@ -614,7 +622,10 @@ const DEFAULT_SIMULATION_PROMPT = `Run simulation on the SFC file to validate it
 Report the simulation results including:
 - Steps visited during simulation
 - Actions that were activated
-- Any issues or warnings detected`;
+- Any issues or warnings detected
+
+if spec in frensh all output should be in frensh
+if english output english`;
 
 const QUICK_ACTIONS = [
   {
@@ -625,12 +636,12 @@ const QUICK_ACTIONS = [
   {
     title: "📊 Extract I/O Only",
     desc: "Analyze spec and extract inputs/outputs configuration",
-    prompt: "Extract all I/O configuration from the specification: sensors, buttons, motors, valves, and indicators."
+    prompt: "Extract all I/O configuration from the specification: sensors, buttons, motors, valves, and indicators.\\n\\nif spec in frensh all output should be in frensh\\nif english output english"
   },
   {
     title: "🔄 Design GSRSM Modes",
     desc: "Create operating modes following IEC 61131-3 GEMMA",
-    prompt: "Design GSRSM modes for this automation system: Initial Stop (A1), Restart Prep (A5), Reset (A6), Emergency Stop (D1), Normal Production (F1)."
+    prompt: "Design GSRSM modes for this automation system: Initial Stop (A1), Restart Prep (A5), Reset (A6), Emergency Stop (D1), Normal Production (F1).\\n\\nif spec in frensh all output should be in frensh\\nif english output english"
   },
   {
     title: "▶️ Simulate SFC",
@@ -651,49 +662,17 @@ const MessageBubble = styled.div<{ $isUser: boolean }>`
   line-height: 1.5;
   border: 1px solid ${props => props.$isUser ? 'rgba(25, 118, 210, 0.3)' : THEME.border};
   max-width: 90%;
-  animation: ${props => props.$isUser ? 'slideInRight' : 'slideInLeft'} 0.3s ease-out;
-
-  @keyframes slideInLeft {
-    from {
-      opacity: 0;
-      transform: translateX(-20px);
-    }
-    to {
-      opacity: 1;
-      transform: translateX(0);
-    }
-  }
-
-  @keyframes slideInRight {
-    from {
-      opacity: 0;
-      transform: translateX(20px);
-    }
-    to {
-      opacity: 1;
-      transform: translateX(0);
-    }
-  }
+  box-shadow: none;
+  animation: none;
 `;
 
 // Agent configuration with display names, icons, and colors
-const AGENT_CONFIG: Record<string, { displayName: string; icon: string; color: string; bgColor: string }> = {
-  'SpecAnalyst': { displayName: 'Specification Analyst', icon: '📋', color: '#ff1493', bgColor: 'rgba(255, 20, 147, 0.15)' },
-  'IOConfigurator': { displayName: 'I/O Configurator', icon: '⚡', color: '#00bcd4', bgColor: 'rgba(0, 188, 212, 0.15)' },
-  'SFCProgrammer': { displayName: 'SFC Programmer', icon: '🔧', color: '#4caf50', bgColor: 'rgba(76, 175, 80, 0.15)' },
-  'Orchestrator': { displayName: 'Orchestrator', icon: '🎯', color: '#ff9800', bgColor: 'rgba(255, 152, 0, 0.15)' },
-  'Renderer': { displayName: 'System Renderer', icon: '🎨', color: '#9c27b0', bgColor: 'rgba(156, 39, 176, 0.15)' },
-  'Simulator': { displayName: 'Simulation Engine', icon: '▶️', color: '#2196f3', bgColor: 'rgba(33, 150, 243, 0.15)' },
-  'SpecValidator': { displayName: 'Spec Validator', icon: '✅', color: '#8bc34a', bgColor: 'rgba(139, 195, 74, 0.15)' },
-  'Assistant': { displayName: 'AI Assistant', icon: '🤖', color: '#607d8b', bgColor: 'rgba(96, 125, 139, 0.15)' },
-};
-
-const getAgentConfig = (agentName: string) => {
-  return AGENT_CONFIG[agentName] || {
-    displayName: agentName,
-    icon: '💬',
-    color: '#607d8b',
-    bgColor: 'rgba(96, 125, 139, 0.12)'
+const getAgentConfig = () => {
+  return {
+    displayName: 'VibIndu',
+    icon: '🤖',
+    color: '#1976d2',
+    bgColor: 'rgba(25, 118, 210, 0.12)'
   };
 };
 
@@ -710,18 +689,7 @@ const AgentBadge = styled.div<{ $color: string; $bgColor: string }>`
   font-weight: 600;
   letter-spacing: 0.3px;
   border: 1px solid ${props => props.$color}25;
-  animation: fadeSlideIn 0.3s ease-out;
-
-  @keyframes fadeSlideIn {
-    from {
-      opacity: 0;
-      transform: translateY(-8px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
+  animation: none;
 `;
 
 const AgentIcon = styled.span`
@@ -906,6 +874,43 @@ const EmptyHistory = styled.div`
   font-size: 0.9rem;
 `;
 
+// Real-time sync event type
+export interface RealtimeSyncEvent {
+  type: 'project_reload' | 'files_changed';
+  filePath?: string;
+  message?: string;
+}
+
+// Hook for triggering real-time synchronization across the app
+const useRealtimeSync = () => {
+  const refreshIO = useSimulationStore((state: any) => state.loadSimulation);
+  const refreshFileTree = useFileExplorerStore((state: any) => state.loadFileTree);
+  const restoreDiagram = useGsrsmFileStore((state: any) => state.restoreCurrentDiagram);
+
+  const triggerSync = async (event: RealtimeSyncEvent) => {
+    console.log('[RealtimeSync] 🔄 Sync triggered:', event.type);
+
+    // Get project path from store
+    const projectPath = useProjectStore.getState().getCurrentProject()?.localPath
+      || useGsrsmStore.getState().project?.localPath;
+
+    if (projectPath) {
+      // Refresh file explorer
+      await refreshFileTree(projectPath);
+    }
+
+    if (event.type === 'project_reload') {
+      // Full reload: IO and Diagram content
+      if (projectPath) {
+        await refreshIO(projectPath);
+      }
+      await restoreDiagram();
+    }
+  };
+
+  return { triggerSync };
+};
+
 interface VibeSidebarProps {
   isOpen: boolean;
   onClose: () => void;
@@ -926,9 +931,10 @@ interface Message {
   toolParams?: Record<string, unknown>;
   isToolResult?: boolean;
   toolResult?: Record<string, unknown>;
-  // Render results (image/video)
+  // Render results (image/video/audio)
   imageData?: string;  // Base64 encoded image data
   videoUrl?: string;   // Video URL for playback
+  audioData?: string;  // Base64 encoded audio data
 }
 
 // Shared markdown components for consistent styling
@@ -993,6 +999,9 @@ const VibeSidebar: React.FC<VibeSidebarProps> = ({ isOpen, onClose }) => {
     appendToAgentMessage
   } = useVibeChatStore();
 
+  // WebSocket and Real-time sync
+  const { triggerSync } = useRealtimeSync();
+
   // Get messages from store (persisted)
   const storedMessages = getActiveMessages();
 
@@ -1032,6 +1041,7 @@ const VibeSidebar: React.FC<VibeSidebarProps> = ({ isOpen, onClose }) => {
         toolResult: m.toolResult,
         imageData: (m as any).imageData,
         videoUrl: (m as any).videoUrl,
+        audioData: (m as any).audioData,
         // No word-by-word streaming needed - messages stream directly from store
         shouldStream: false
       };
@@ -1053,30 +1063,49 @@ const VibeSidebar: React.FC<VibeSidebarProps> = ({ isOpen, onClose }) => {
   }, [storedMessages]);
 
   const [inputValue, setInputValue] = useState("");
+  const [isLiveModeActive, setIsLiveModeActive] = useState(true);
+  const [isComputerModeActive, setIsComputerModeActive] = useState(false); // Disabled
+  const [isStorytellerModeActive, setIsStorytellerModeActive] = useState(false); // Disabled
+
+  const handleSendFromLive = (query: string) => {
+    // A2A: The Live Agent dispatches to Orchestrator server-to-server.
+    // We rely on the backend to broadcast status updates back to this sidebar.
+    if (!query.trim()) return;
+    if (!activeConversationId) createConversation();
+    addMessage({ text: `🎙️ [Voice → A2A] ${query}`, isUser: true });
+    saveConversations().catch(err => console.error('[VibeSidebar] Failed to save live dispatch:', err));
+  };
   const [socket, setSocket] = useState<WebSocket | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'error' | 'disconnected'>('disconnected');
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
-  // Default: gemini-3-flash-preview with thinking level "low"
-  const [selectedModel, setSelectedModel] = useState('gemini-3-flash-preview');
+  // Default: gemini-3.1-flash-lite-preview with thinking level "low"
+  const [selectedModel, setSelectedModel] = useState('gemini-3.1-flash-lite-preview');
   const [thinkingLevel, setThinkingLevel] = useState<string>('low');
   const [showHistory, setShowHistory] = useState(false);
 
   // Available thinking levels per model
+  // gemini-3.1-pro-preview: low, medium, high
   // gemini-3-pro-preview: low, high (cannot disable thinking)
-  // gemini-3-flash-preview: minimal, low, medium, high
+  // gemini-3.1-flash-lite-preview: minimal, low, medium, high
   const getThinkingLevels = (model: string) => {
-    if (model === 'gemini-3-pro-preview') {
+    if (model === 'gemini-3.1-pro-preview') {
       return [
-        { value: 'low', label: '🧠 Low (Faster)' },
-        { value: 'high', label: '🧠 High (Deep)' }
+        { value: 'low', label: 'Low' },
+        { value: 'medium', label: 'Medium' },
+        { value: 'high', label: 'High' }
+      ];
+    } else if (model === 'gemini-3-pro-preview') {
+      return [
+        { value: 'low', label: 'Low' },
+        { value: 'high', label: 'High' }
       ];
     } else {
-      // gemini-3-flash-preview
+      // gemini-3.1-flash-lite-preview
       return [
-        { value: 'minimal', label: '⚡ Minimal (Fastest)' },
-        { value: 'low', label: '🧠 Low (Fast)' },
-        { value: 'medium', label: '🧠 Medium (Balanced)' },
-        { value: 'high', label: '🧠 High (Deep)' }
+        { value: 'minimal', label: 'Minimal (Fastest)' },
+        { value: 'low', label: 'Low' },
+        { value: 'medium', label: 'Medium' },
+        { value: 'high', label: 'High' }
       ];
     }
   };
@@ -1090,8 +1119,13 @@ const VibeSidebar: React.FC<VibeSidebarProps> = ({ isOpen, onClose }) => {
       if (thinkingLevel === 'minimal' || thinkingLevel === 'medium') {
         setThinkingLevel('low');
       }
+    } else if (newModel === 'gemini-3.1-pro-preview') {
+      // 3.1 Pro supports medium
+      if (thinkingLevel === 'minimal') {
+        setThinkingLevel('low');
+      }
     }
-    // Flash supports all levels, no need to change
+    // Flash Lite supports all levels, no need to change
   };
 
   // Render state
@@ -1108,6 +1142,7 @@ const VibeSidebar: React.FC<VibeSidebarProps> = ({ isOpen, onClose }) => {
   // Resize state
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [isResizing, setIsResizing] = useState(false);
+  const [pendingSfcRenders, setPendingSfcRenders] = useState<any[]>([]); // Track SFCs that need rendering
   const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -1211,10 +1246,8 @@ const VibeSidebar: React.FC<VibeSidebarProps> = ({ isOpen, onClose }) => {
       console.log('Connecting to WebSocket...');
       setConnectionStatus('connecting');
 
-      // Use the same hostname as the current page, but force 127.0.0.1 if it's localhost
-      // to avoid IPv6/IPv4 mismatch issues (uvicorn often listens on IPv4 only)
-      const host = (window.location.hostname === 'localhost' || !window.location.hostname) ? '127.0.0.1' : window.location.hostname;
-      const wsUrl = `ws://${host}:8000/ws/vibe`;
+      // Use dynamic URL from config with protocol switching for production (WSS)
+      const wsUrl = AGENTS_BASE_URL.replace('http://', 'ws://').replace('https://', 'wss://') + '/ws/vibe';
       console.log(`[VibeSidebar] Connecting to WebSocket at ${wsUrl}`);
       ws = new WebSocket(wsUrl);
 
@@ -1227,11 +1260,6 @@ const VibeSidebar: React.FC<VibeSidebarProps> = ({ isOpen, onClose }) => {
         try {
           const data = JSON.parse(event.data);
 
-          // Helper to add streaming message (for real-time display)
-          const addStreamingMsg = (msg: Message) => {
-            setStreamingMessages(prev => [...prev, msg]);
-          };
-
           // Helper to persist message to store (for long-term storage)
           const persistMessage = (msg: Omit<Message, 'id' | 'timestamp'>) => {
             addMessage(msg);
@@ -1241,6 +1269,7 @@ const VibeSidebar: React.FC<VibeSidebarProps> = ({ isOpen, onClose }) => {
           console.log(`[VibeSidebar] 📨 WS Message: type=${data.type}, agent=${data.agent}, text=${data.text?.substring?.(0, 100) || 'N/A'}`);
 
           // Handle different message types for enhanced visualization
+          /* DISABLED: Thinking messages are not synchronized and cause layout shifts
           if (data.type === 'thinking') {
             console.log(`[VibeSidebar] 🧠 THINKING from ${data.agent}: ${data.text?.substring?.(0, 100)}`);
 
@@ -1260,7 +1289,7 @@ const VibeSidebar: React.FC<VibeSidebarProps> = ({ isOpen, onClose }) => {
                 return [...prev, { text: data.text, isUser: false, agent: data.agent, isThinking: true }];
               }
             });
-          } else if (data.type === 'task') {
+          } else */ if (data.type === 'task') {
             // Show identified task (persisted)
             persistMessage({
               text: data.text,
@@ -1289,6 +1318,22 @@ const VibeSidebar: React.FC<VibeSidebarProps> = ({ isOpen, onClose }) => {
           } else if (data.type === 'status' || data.type === 'result') {
             // Status and results are persisted
             persistMessage({ text: data.text, isUser: false, agent: data.agent });
+          } else if (data.type === 'action') {
+            // Computer Agent actions - show as status with specific icon/prefix
+            persistMessage({ 
+              text: `🖱️ ${data.text || 'Executing UI action...'}`, 
+              isUser: false, 
+              agent: data.agent || 'Computer Agent' 
+            });
+          } else if (data.type === 'story_result') {
+            // Storyteller results - include image and audio
+            persistMessage({ 
+              text: data.text || '✨ Cinematic Story Complete!', 
+              isUser: false, 
+              agent: data.agent || 'Creative Storyteller',
+              imageData: data.imageData,
+              audioData: data.audioData
+            });
           } else if (data.type === 'token' || data.type === 'stream' || data.type === 'text') {
             // STREAM DIRECTLY TO STORE - display AND save in one step
             // This ensures messages are persisted even if reload happens
@@ -1400,14 +1445,15 @@ const VibeSidebar: React.FC<VibeSidebarProps> = ({ isOpen, onClose }) => {
             if (project?.localPath) {
               useSimulationStore.getState().loadSimulation(project.localPath);
             }
-          } else if (data.type === 'project_reload' || data.type === 'files_changed') {
-            // Agent made changes - use real-time sync hook for production-grade updates
-            console.log(`[VibeSidebar] 🔄 Real-time sync triggered: ${data.type}`);
             triggerSync({
               type: data.type as 'project_reload' | 'files_changed',
               filePath: data.filePath,
               message: data.message,
             } as RealtimeSyncEvent);
+          } else if (data.type === 'sfc_generated') {
+            // Agent generated an SFC - queue it for thumbnail rendering
+            console.log('[VibeSidebar] 🎨 SFC Generated - queuing for thumbnail rendering', data.sfc_file.name);
+            setPendingSfcRenders(prev => [...prev, data.sfc_file]);
           } else if (data.type === 'agent_response') {
             // ADK run complete - clear thinking indicators and force final save
             console.log('[VibeSidebar] 📨 Agent response (ADK complete) - forcing final save');
@@ -1428,6 +1474,14 @@ const VibeSidebar: React.FC<VibeSidebarProps> = ({ isOpen, onClose }) => {
             // Stop simulation
             console.log('[VibeSidebar] ⏹️ Stopping simulation...');
             useSimulationStore.getState().stopSimulation();
+          } else if (data.type === 'project_reload' || data.type === 'files_changed') {
+            // Signal to refresh file explorer, IO, and diagram
+            console.log(`[VibeSidebar] 🔄 Received ${data.type} - triggering sync`);
+            triggerSync({
+              type: data.type as 'project_reload' | 'files_changed',
+              filePath: data.filePath,
+              message: data.message
+            });
           } else if (data.type === 'sim_panel_close') {
             // Close simulation panel
             console.log('[VibeSidebar] 🚪 Closing simulation panel...');
@@ -1514,22 +1568,21 @@ const VibeSidebar: React.FC<VibeSidebarProps> = ({ isOpen, onClose }) => {
     }
 
     setIsRendering(true);
-    setRenderStatus(actionType === 'image' ? '🎨 Generating system image...' : '🎬 Starting video generation...');
+    setRenderStatus(actionType === 'image' ? '🎨 Generating system image...' : (actionType === 'video' ? '🎬 Starting video generation...' : '📚 Generating story...'));
 
     // Add status message to chat
-    addMessage({
-      text: actionType === 'image'
-        ? '🖼️ Generating system diagram from spec.md using Nano Banana Pro...'
-        : '🎬 Starting system animation with Veo 3.1...',
-      isUser: false,
-      agent: 'Renderer'
-    });
+    if (actionType === 'image') {
+      addMessage({ text: '🖼️ Generating system diagram from spec.md using Nano Banana Pro...', isUser: false, agent: 'Renderer' });
+    } else if (actionType === 'video') {
+      addMessage({ text: '🎬 Starting system animation with Veo 3.1...', isUser: false, agent: 'Renderer' });
+    } else {
+      addMessage({ text: '📚 Generating a multimodal story. This includes audio narration and images, so it may take a minute...', isUser: false, agent: 'Creative Storyteller' });
+    }
 
     try {
       if (actionType === 'image') {
         const result = await ApiService.generateSystemImage(currentProject.localPath);
         if (result.success && result.imageBase64) {
-          // Add message with embedded image preview
           addMessage({
             text: `✅ **System Visualization Generated!**\n\n🎨 Your automation system has been rendered as a photorealistic 3D image.`,
             isUser: false,
@@ -1541,8 +1594,8 @@ const VibeSidebar: React.FC<VibeSidebarProps> = ({ isOpen, onClose }) => {
           addMessage({ text: `❌ Image generation failed: ${result.error}`, isUser: false, agent: 'Renderer' });
           setRenderStatus('❌ Failed');
         }
-      } else {
-        // Video generation - start the operation
+        setIsRendering(false);
+      } else if (actionType === 'video') {
         const result = await ApiService.generateSystemVideo(currentProject.localPath);
         if (result.success && result.operationName) {
           addMessage({
@@ -1552,16 +1605,14 @@ const VibeSidebar: React.FC<VibeSidebarProps> = ({ isOpen, onClose }) => {
           });
           setRenderStatus('⏳ Video generating...');
 
-          // Poll for completion
           let attempts = 0;
-          const maxAttempts = 60; // 5 minutes max (5 second intervals)
+          const maxAttempts = 60;
           const pollInterval = setInterval(async () => {
             attempts++;
             const status = await ApiService.checkVideoStatus(result.operationName!);
 
             if (status.status === 'complete' && status.videoPath) {
               clearInterval(pollInterval);
-              // Download the video
               const downloadResult = await ApiService.downloadVideo(status.videoPath, currentProject.localPath!);
               if (downloadResult.success && downloadResult.videoBase64) {
                 addMessage({
@@ -1572,11 +1623,7 @@ const VibeSidebar: React.FC<VibeSidebarProps> = ({ isOpen, onClose }) => {
                 } as any);
                 setRenderStatus('✅ Video complete!');
               } else {
-                addMessage({
-                  text: `✅ **Video Generated!**\n\n🎬 Your system animation is ready.`,
-                  isUser: false,
-                  agent: 'Renderer'
-                });
+                addMessage({ text: `✅ **Video Generated!**\n\n🎬 Your system animation is ready.`, isUser: false, agent: 'Renderer' });
                 setRenderStatus('✅ Video complete!');
               }
               setIsRendering(false);
@@ -1602,11 +1649,7 @@ const VibeSidebar: React.FC<VibeSidebarProps> = ({ isOpen, onClose }) => {
     } catch (error: any) {
       addMessage({ text: `❌ Error: ${error.message}`, isUser: false, agent: 'Renderer' });
       setRenderStatus('❌ Error');
-    } finally {
-      if (actionType === 'image') {
-        setIsRendering(false);
-      }
-      // Video case handles its own setIsRendering in the poll callback
+      setIsRendering(false);
     }
   };
 
@@ -1616,7 +1659,7 @@ const VibeSidebar: React.FC<VibeSidebarProps> = ({ isOpen, onClose }) => {
 
     setIsRequestingAccess(true);
     try {
-      const response = await fetch('http://localhost:3001/api/demo-access/request', {
+      const response = await fetch(`${API_BASE_URL}/demo-access/request`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1683,7 +1726,7 @@ const VibeSidebar: React.FC<VibeSidebarProps> = ({ isOpen, onClose }) => {
     // Prepare payload - include conversationId for session continuity
     // Gemini 3 models use thinkingLevel parameter:
     // - gemini-3-pro-preview: low, high
-    // - gemini-3-flash-preview: minimal, low, medium, high
+    // - gemini-3.1-flash-lite-preview: minimal, low, medium, high
     const payload: any = {
       text: inputValue,
       model: selectedModel,
@@ -1771,499 +1814,578 @@ const VibeSidebar: React.FC<VibeSidebarProps> = ({ isOpen, onClose }) => {
   };
 
   return (
-    <SidebarContainer $isOpen={isOpen} $width={sidebarWidth} $isResizing={isResizing}>
-      <ResizeHandle
-        $isResizing={isResizing}
-        onMouseDown={handleResizeStart}
-        title="Drag to resize"
-      />
-      {!hasVibeAccess ? (
-        // No Access - Request Demo Screen
-        <>
-          <Header>
-            <HeaderTitle>🤖 VibIndu Agent</HeaderTitle>
-            <HeaderActions>
-              <HeaderButton onClick={onClose} title="Close">
-                <FiX size={18} />
-              </HeaderButton>
-            </HeaderActions>
-          </Header>
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: '100%',
-            padding: '40px 24px',
-            textAlign: 'center',
-            background: `linear-gradient(135deg, ${THEME.bgSecondary} 0%, #e3f2fd 50%, #fff3e0 100%)`
-          }}>
-            {/* Animated Lock Icon with Glow */}
+    <>
+      <SidebarContainer $isOpen={isOpen} $width={sidebarWidth} $isResizing={isResizing}>
+        <ResizeHandle
+          $isResizing={isResizing}
+          onMouseDown={handleResizeStart}
+          title="Drag to resize"
+        />
+        {!hasVibeAccess ? (
+          // No Access - Request Demo Screen
+          <>
+            <Header>
+              <HeaderTitle>🤖 VibIndu Agent</HeaderTitle>
+              <HeaderActions>
+                <HeaderButton onClick={onClose} title="Close">
+                  <FiX size={18} />
+                </HeaderButton>
+              </HeaderActions>
+            </Header>
             <div style={{
-              fontSize: '4.5rem',
-              marginBottom: '24px',
-              filter: 'drop-shadow(0 4px 12px rgba(255, 152, 0, 0.4))',
-              animation: 'pulse 2s infinite'
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '100%',
+              padding: '40px 24px',
+              textAlign: 'center',
+              background: `linear-gradient(135deg, ${THEME.bgSecondary} 0%, #e3f2fd 50%, #fff3e0 100%)`
             }}>
-              🔐
-            </div>
-            <style>{`
+              {/* Animated Lock Icon with Glow */}
+              <div style={{
+                fontSize: '4.5rem',
+                marginBottom: '24px',
+                filter: 'drop-shadow(0 4px 12px rgba(255, 152, 0, 0.4))',
+                animation: 'pulse 2s infinite'
+              }}>
+                🔐
+              </div>
+              <style>{`
               @keyframes pulse {
                 0%, 100% { transform: scale(1); }
                 50% { transform: scale(1.05); }
               }
             `}</style>
 
-            <h2 style={{
-              margin: '0 0 8px',
-              color: THEME.text,
-              fontSize: '1.6rem',
-              fontWeight: 700,
-              background: 'linear-gradient(135deg, #1976d2, #ff6b35)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text'
-            }}>
-              Unlock the Power of VibIndu AI
-            </h2>
-
-            <p style={{
-              color: THEME.textSecondary,
-              marginBottom: '16px',
-              fontSize: '1rem',
-              fontWeight: 500
-            }}>
-              Transform your automation workflow
-            </p>
-
-            {/* Feature highlights */}
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '12px',
-              marginBottom: '28px',
-              width: '100%',
-              maxWidth: '320px'
-            }}>
-              {[
-                { icon: '⚡', text: 'Generate SFC diagrams from specs in seconds' },
-                { icon: '🎯', text: 'Auto-extract I/O configurations from PDFs' },
-                { icon: '🔧', text: 'Build complete GSRSM operating modes' },
-                { icon: '🤖', text: 'Powered by Google Gemini 3 AI' }
-              ].map((item, i) => (
-                <div key={i} style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  background: 'rgba(255,255,255,0.8)',
-                  borderRadius: '10px',
-                  padding: '10px 14px',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-                  fontSize: '0.9rem',
-                  color: THEME.text,
-                  textAlign: 'left'
-                }}>
-                  <span style={{ fontSize: '1.3rem' }}>{item.icon}</span>
-                  <span>{item.text}</span>
-                </div>
-              ))}
-            </div>
-
-            {/* Status message */}
-            {requestStatus !== 'idle' && (
-              <div style={{
-                padding: '12px 20px',
-                borderRadius: '8px',
-                marginBottom: '16px',
-                backgroundColor: requestStatus === 'error' ? '#ffebee' : '#e8f5e9',
-                color: requestStatus === 'error' ? '#c62828' : '#2e7d32',
-                fontWeight: 500,
-                fontSize: '0.95rem'
+              <h2 style={{
+                margin: '0 0 8px',
+                color: THEME.text,
+                fontSize: '1.6rem',
+                fontWeight: 700,
+                background: 'linear-gradient(135deg, #1976d2, #ff6b35)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text'
               }}>
-                {requestStatus === 'success' && '✅ '}
-                {requestStatus === 'already_requested' && '📬 '}
-                {requestStatus === 'error' && '❌ '}
-                {requestMessage}
+                Unlock the Power of VibIndu AI
+              </h2>
+
+              <p style={{
+                color: THEME.textSecondary,
+                marginBottom: '16px',
+                fontSize: '1rem',
+                fontWeight: 500
+              }}>
+                Transform your automation workflow
+              </p>
+
+              {/* Feature highlights */}
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+                marginBottom: '28px',
+                width: '100%',
+                maxWidth: '320px'
+              }}>
+                {[
+                  { icon: '⚡', text: 'Generate SFC diagrams from specs in seconds' },
+                  { icon: '🎯', text: 'Auto-extract I/O configurations from PDFs' },
+                  { icon: '🔧', text: 'Build complete GSRSM operating modes' },
+                  { icon: '🤖', text: 'Powered by Google Gemini 3 AI' }
+                ].map((item, i) => (
+                  <div key={i} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    background: 'rgba(255,255,255,0.8)',
+                    borderRadius: '10px',
+                    padding: '10px 14px',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                    fontSize: '0.9rem',
+                    color: THEME.text,
+                    textAlign: 'left'
+                  }}>
+                    <span style={{ fontSize: '1.3rem' }}>{item.icon}</span>
+                    <span>{item.text}</span>
+                  </div>
+                ))}
               </div>
-            )}
 
-            {/* Request button */}
-            {requestStatus === 'idle' && (
-              <button
-                onClick={handleRequestAccess}
-                disabled={isRequestingAccess}
-                style={{
-                  background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
-                  color: 'white',
-                  padding: '14px 36px',
-                  borderRadius: '12px',
-                  border: 'none',
-                  fontWeight: 600,
-                  fontSize: '1.05rem',
-                  cursor: isRequestingAccess ? 'wait' : 'pointer',
-                  boxShadow: '0 4px 16px rgba(25, 118, 210, 0.35)',
-                  transition: 'all 0.2s ease',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  opacity: isRequestingAccess ? 0.7 : 1
-                }}
-                onMouseOver={(e) => {
-                  if (!isRequestingAccess) {
-                    e.currentTarget.style.transform = 'translateY(-2px)';
-                    e.currentTarget.style.boxShadow = '0 6px 20px rgba(25, 118, 210, 0.45)';
-                  }
-                }}
-                onMouseOut={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = '0 4px 16px rgba(25, 118, 210, 0.35)';
-                }}
-              >
-                {isRequestingAccess ? (
-                  <>⏳ Sending Request...</>
-                ) : (
-                  <>🚀 Request Early Access</>
-                )}
-              </button>
-            )}
-
-            <p style={{
-              color: THEME.textSecondary,
-              marginTop: '24px',
-              fontSize: '0.82rem',
-              lineHeight: 1.5
-            }}>
-              {user?.email ? (
-                <>Logged in as <strong style={{ color: THEME.primary }}>{user.email}</strong></>
-              ) : (
-                <>Already have access? Try logging out and back in.</>
+              {/* Status message */}
+              {requestStatus !== 'idle' && (
+                <div style={{
+                  padding: '12px 20px',
+                  borderRadius: '8px',
+                  marginBottom: '16px',
+                  backgroundColor: requestStatus === 'error' ? '#ffebee' : '#e8f5e9',
+                  color: requestStatus === 'error' ? '#c62828' : '#2e7d32',
+                  fontWeight: 500,
+                  fontSize: '0.95rem'
+                }}>
+                  {requestStatus === 'success' && '✅ '}
+                  {requestStatus === 'already_requested' && '📬 '}
+                  {requestStatus === 'error' && '❌ '}
+                  {requestMessage}
+                </div>
               )}
-            </p>
-          </div>
-        </>
-      ) : showHistory ? (
-        // History Panel
-        <HistoryPanel>
-          <HistoryHeader>
-            <BackButton onClick={() => setShowHistory(false)} title="Back to chat">
-              <FiChevronLeft size={20} />
-            </BackButton>
-            <HistoryTitle>Chat History</HistoryTitle>
-          </HistoryHeader>
-          <HistoryList>
-            {conversations.length === 0 ? (
-              <EmptyHistory>
-                <FiClock size={32} style={{ marginBottom: 12, opacity: 0.5 }} />
-                <div>No conversation history yet</div>
-                <div style={{ fontSize: '0.8rem', marginTop: 4 }}>Start a new chat to begin</div>
-              </EmptyHistory>
-            ) : (
-              conversations.map(conv => (
-                <HistoryItem
-                  key={conv.id}
-                  $isActive={conv.id === activeConversationId}
-                  onClick={() => handleSelectConversation(conv.id)}
+
+              {/* Request button */}
+              {requestStatus === 'idle' && (
+                <button
+                  onClick={handleRequestAccess}
+                  disabled={isRequestingAccess}
+                  style={{
+                    background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
+                    color: 'white',
+                    padding: '14px 36px',
+                    borderRadius: '12px',
+                    border: 'none',
+                    fontWeight: 600,
+                    fontSize: '1.05rem',
+                    cursor: isRequestingAccess ? 'wait' : 'pointer',
+                    boxShadow: '0 4px 16px rgba(25, 118, 210, 0.35)',
+                    transition: 'all 0.2s ease',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    opacity: isRequestingAccess ? 0.7 : 1
+                  }}
+                  onMouseOver={(e) => {
+                    if (!isRequestingAccess) {
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                      e.currentTarget.style.boxShadow = '0 6px 20px rgba(25, 118, 210, 0.45)';
+                    }
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = '0 4px 16px rgba(25, 118, 210, 0.35)';
+                  }}
                 >
-                  <HistoryItemContent>
-                    <HistoryItemTitle>{conv.title || 'Untitled Chat'}</HistoryItemTitle>
-                    <HistoryItemDate>
-                      {conv.messages.length} message{conv.messages.length !== 1 ? 's' : ''} • {formatDate(conv.updatedAt)}
-                    </HistoryItemDate>
-                  </HistoryItemContent>
-                  <HistoryItemDelete
-                    onClick={(e) => handleDeleteConversation(e, conv.id)}
-                    title="Delete conversation"
-                  >
-                    <FiTrash2 size={14} />
-                  </HistoryItemDelete>
-                </HistoryItem>
-              ))
-            )}
-          </HistoryList>
-        </HistoryPanel>
-      ) : (
-        // Chat Panel
-        <>
-          <Header>
-            <HeaderTitle>
-              <StatusDot $status={connectionStatus} title={`Status: ${connectionStatus}`} />
-              VibIndu Agent
-            </HeaderTitle>
-            <HeaderActions>
-              <HeaderButton onClick={handleNewChat} title="New Chat">
-                <FiPlus size={20} />
-              </HeaderButton>
-              <HeaderButton onClick={() => setShowHistory(true)} title="History">
-                <FiClock size={18} />
-              </HeaderButton>
-              <HeaderButton onClick={onClose} title="Close">
-                <FiX size={18} />
-              </HeaderButton>
-            </HeaderActions>
-          </Header>
+                  {isRequestingAccess ? (
+                    <>⏳ Sending Request...</>
+                  ) : (
+                    <>🚀 Request Early Access</>
+                  )}
+                </button>
+              )}
 
-          <Content>
-            <ChatContentWrapper>
-              <ChatContent ref={chatContentRef} onScroll={handleChatScroll}>
-                {messages.length === 0 ? (
-                /* Quick Start UI when no messages */
-                <QuickStartContainer>
-                  <QuickStartTitle>🤖 VibIndu Agent Ready</QuickStartTitle>
-                  <QuickStartSubtitle>
-                    Upload a specification PDF and select an action below, or type your own request.
-                  </QuickStartSubtitle>
-                  {QUICK_ACTIONS.map((action, idx) => (
-                    <QuickStartButton
-                      key={idx}
-                      onClick={() => {
-                        // Normal prompt actions
-                        setInputValue(action.prompt);
-                        // Also prompt user to attach a file if needed
-                        if (idx === 0 && !attachedFile) {
-                          fileInputRef.current?.click();
-                        }
-                      }}
-                    >
-                      <QuickStartButtonTitle>{action.title}</QuickStartButtonTitle>
-                      <QuickStartButtonDesc>{action.desc}</QuickStartButtonDesc>
-                    </QuickStartButton>
-                  ))}
-
-                  {/* Render Actions - Prominent separate section */}
-                  <RenderActionsSection>
-                    <RenderSectionTitle>🎨 Visualization Tools</RenderSectionTitle>
-                    <RenderButtonsRow>
-                      <RenderButton
-                        $variant="image"
-                        $isLoading={isRendering}
-                        disabled={isRendering}
-                        onClick={() => handleRenderAction('image')}
-                        title="Generate a photorealistic 3D render of your automation system"
-                      >
-                        <RenderButtonIcon>🖼️</RenderButtonIcon>
-                        <RenderButtonLabel>Generate Image</RenderButtonLabel>
-                        <RenderButtonSubtext>Nano Banana Pro</RenderButtonSubtext>
-                      </RenderButton>
-                      <RenderButton
-                        $variant="video"
-                        $isLoading={isRendering}
-                        disabled={isRendering}
-                        onClick={() => handleRenderAction('video')}
-                        title="Create an animated video showing your system in operation"
-                      >
-                        <RenderButtonIcon>🎬</RenderButtonIcon>
-                        <RenderButtonLabel>Animate System</RenderButtonLabel>
-                        <RenderButtonSubtext>Veo 3.1</RenderButtonSubtext>
-                      </RenderButton>
-                    </RenderButtonsRow>
-                    {renderStatus && (
-                      <RenderStatusBadge
-                        $status={renderStatus.includes('✅') ? 'success' : renderStatus.includes('❌') ? 'error' : isRendering ? 'loading' : 'idle'}
-                      >
-                        {renderStatus}
-                      </RenderStatusBadge>
-                    )}
-                  </RenderActionsSection>
-                </QuickStartContainer>
+              <p style={{
+                color: THEME.textSecondary,
+                marginTop: '24px',
+                fontSize: '0.82rem',
+                lineHeight: 1.5
+              }}>
+                {user?.email ? (
+                  <>Logged in as <strong style={{ color: THEME.primary }}>{user.email}</strong></>
+                ) : (
+                  <>Already have access? Try logging out and back in.</>
+                )}
+              </p>
+            </div>
+          </>
+        ) : showHistory ? (
+          // History Panel
+          <HistoryPanel>
+            <HistoryHeader>
+              <BackButton onClick={() => setShowHistory(false)} title="Back to chat">
+                <FiChevronLeft size={20} />
+              </BackButton>
+              <HistoryTitle>Chat History</HistoryTitle>
+            </HistoryHeader>
+            <HistoryList>
+              {conversations.length === 0 ? (
+                <EmptyHistory>
+                  <FiClock size={32} style={{ marginBottom: 12, opacity: 0.5 }} />
+                  <div>No conversation history yet</div>
+                  <div style={{ fontSize: '0.8rem', marginTop: 4 }}>Start a new chat to begin</div>
+                </EmptyHistory>
               ) : (
-                /* Normal message display */
-                messages.map((msg, idx) => {
-                  // Choose appropriate bubble component
-                  let BubbleComponent: typeof MessageBubble = MessageBubble;
-                  if (msg.isThinking) BubbleComponent = ThinkingBubble;
-                  else if (msg.isTask) BubbleComponent = TaskBubble;
-                  else if (msg.isToolCall) BubbleComponent = ToolCallBubble;
-                  else if (msg.isToolResult) BubbleComponent = ToolResultBubble;
-                  else if (msg.isTool) BubbleComponent = ToolBubble;
-                  else if (msg.agent === 'SpecAnalyst') BubbleComponent = AnalystBubble;
+                conversations.map(conv => (
+                  <HistoryItem
+                    key={conv.id}
+                    $isActive={conv.id === activeConversationId}
+                    onClick={() => handleSelectConversation(conv.id)}
+                  >
+                    <HistoryItemContent>
+                      <HistoryItemTitle>{conv.title || 'Untitled Chat'}</HistoryItemTitle>
+                      <HistoryItemDate>
+                        {conv.messages.length} message{conv.messages.length !== 1 ? 's' : ''} • {formatDate(conv.updatedAt)}
+                      </HistoryItemDate>
+                    </HistoryItemContent>
+                    <HistoryItemDelete
+                      onClick={(e) => handleDeleteConversation(e, conv.id)}
+                      title="Delete conversation"
+                    >
+                      <FiTrash2 size={14} />
+                    </HistoryItemDelete>
+                  </HistoryItem>
+                ))
+              )}
+            </HistoryList>
+          </HistoryPanel>
+        ) : (
+          // Chat Panel
+          <>
+            <Header>
+              <HeaderTitle>
+                <StatusDot $status={connectionStatus} title={`Status: ${connectionStatus}`} />
+                VibIndu Live Agent
+              </HeaderTitle>
+              <HeaderActions>
+                <HeaderButton onClick={handleNewChat} title="New Chat">
+                  <FiPlus size={20} />
+                </HeaderButton>
+                <HeaderButton onClick={() => setShowHistory(true)} title="History">
+                  <FiClock size={18} />
+                </HeaderButton>
+                <HeaderButton onClick={onClose} title="Close">
+                  <FiX size={18} />
+                </HeaderButton>
+              </HeaderActions>
+            </Header>
 
-                  // Get agent styling config
-                  const agentConfig = msg.agent ? getAgentConfig(msg.agent) : null;
+            <Content>
+              <ChatContentWrapper>
+                <ChatContent ref={chatContentRef} onScroll={handleChatScroll}>
+                  {messages.length === 0 ? (
+                    /* Quick Start UI when no messages */
+                    <QuickStartContainer>
+                      <QuickStartTitle>🤖 VibIndu Agent Ready</QuickStartTitle>
+                      <QuickStartSubtitle>
+                        Upload a specification PDF and select an action below, or type your own request.
+                      </QuickStartSubtitle>
+                      {QUICK_ACTIONS.map((action, idx) => (
+                        <QuickStartButton
+                          key={idx}
+                          onClick={() => {
+                            // Normal prompt actions
+                            setInputValue(action.prompt);
+                            // Also prompt user to attach a file if needed
+                            if (idx === 0 && !attachedFile) {
+                              fileInputRef.current?.click();
+                            }
+                          }}
+                        >
+                          <QuickStartButtonTitle>{action.title}</QuickStartButtonTitle>
+                          <QuickStartButtonDesc>{action.desc}</QuickStartButtonDesc>
+                        </QuickStartButton>
+                      ))}
 
-                  return (
-                    <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.isUser ? 'flex-end' : 'flex-start' }}>
-                      {!msg.isUser && agentConfig && (
-                        <AgentBadge $color={agentConfig.color} $bgColor={agentConfig.bgColor}>
-                          <AgentIcon>{agentConfig.icon}</AgentIcon>
-                          {agentConfig.displayName}
-                        </AgentBadge>
-                      )}
-                      <BubbleComponent $isUser={msg.isUser}>
-                        {msg.isToolCall && msg.toolName && (
-                          <>
-                            <ToolDetailLabel>🔧 {msg.toolName}</ToolDetailLabel>
-                            {msg.toolParams && Object.keys(msg.toolParams).length > 0 && (
-                              <ToolDetailPre>{JSON.stringify(msg.toolParams, null, 2)}</ToolDetailPre>
+                      {/* Render Actions - Prominent separate section */}
+                      <RenderActionsSection>
+                        <RenderSectionTitle>🎨 Visualization Tools</RenderSectionTitle>
+                        <RenderButtonsRow>
+                          <RenderButton
+                            $variant="image"
+                            $isLoading={isRendering}
+                            disabled={isRendering}
+                            onClick={() => handleRenderAction('image')}
+                            title="Generate a photorealistic 3D render of your automation system"
+                          >
+                            <RenderButtonIcon>🖼️</RenderButtonIcon>
+                            <RenderButtonLabel>Generate Image</RenderButtonLabel>
+                            <RenderButtonSubtext>Nano Banana Pro</RenderButtonSubtext>
+                          </RenderButton>
+                          <RenderButton
+                            $variant="video"
+                            $isLoading={isRendering}
+                            disabled={isRendering}
+                            onClick={() => handleRenderAction('video')}
+                            title="Create an animated video showing your system in operation"
+                          >
+                            <RenderButtonIcon>🎬</RenderButtonIcon>
+                            <RenderButtonLabel>Animate System</RenderButtonLabel>
+                            <RenderButtonSubtext>Veo 3.1</RenderButtonSubtext>
+                          </RenderButton>
+                        </RenderButtonsRow>
+                        {renderStatus && (
+                          <RenderStatusBadge
+                            $status={renderStatus.includes('✅') ? 'success' : renderStatus.includes('❌') ? 'error' : isRendering ? 'loading' : 'idle'}
+                          >
+                            {renderStatus}
+                          </RenderStatusBadge>
+                        )}
+                      </RenderActionsSection>
+                    </QuickStartContainer>
+                  ) : (
+                    /* Normal message display */
+                    messages.map((msg, idx) => {
+                      // Choose appropriate bubble component
+                      let BubbleComponent: typeof MessageBubble = MessageBubble;
+                      if (msg.isThinking) BubbleComponent = ThinkingBubble;
+                      else if (msg.isTask) BubbleComponent = TaskBubble;
+                      else if (msg.isToolCall) BubbleComponent = ToolCallBubble;
+                      else if (msg.isToolResult) BubbleComponent = ToolResultBubble;
+                      else if (msg.isTool) BubbleComponent = ToolBubble;
+                      else if (msg.agent === 'SpecAnalyst') BubbleComponent = AnalystBubble;
+
+                      // Get agent styling config
+                      const agentConfig = msg.isUser ? null : getAgentConfig();
+                      const msgKey = (msg as any).id || `msg-${idx}`;
+
+                      return (
+                        <div key={msgKey} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.isUser ? 'flex-end' : 'flex-start' }}>
+                          {!msg.isUser && agentConfig && (
+                            <AgentBadge $color={agentConfig.color} $bgColor={agentConfig.bgColor}>
+                              <AgentIcon>{agentConfig.icon}</AgentIcon>
+                              {agentConfig.displayName}
+                            </AgentBadge>
+                          )}
+                          <BubbleComponent $isUser={msg.isUser}>
+                            {msg.isToolCall && msg.toolName && (
+                              <>
+                                <ToolDetailLabel>🔧 {msg.toolName}</ToolDetailLabel>
+                                {msg.toolParams && Object.keys(msg.toolParams).length > 0 && (
+                                  <ToolDetailPre>{JSON.stringify(msg.toolParams, null, 2)}</ToolDetailPre>
+                                )}
+                              </>
                             )}
-                          </>
-                        )}
-                        {msg.isToolResult && msg.toolName && (
-                          <>
-                            <ToolDetailLabel>{(msg.toolResult as Record<string, unknown>)?.success ? '✅' : '❌'} {msg.toolName}</ToolDetailLabel>
-                            {msg.toolResult && Object.keys(msg.toolResult).length > 0 && (
-                              <ToolDetailPre>{JSON.stringify(msg.toolResult, null, 2)}</ToolDetailPre>
+                            {msg.isToolResult && msg.toolName && (
+                              <>
+                                <ToolDetailLabel>{(msg.toolResult as Record<string, unknown>)?.success ? '✅' : '❌'} {msg.toolName}</ToolDetailLabel>
+                                {msg.toolResult && Object.keys(msg.toolResult).length > 0 && (
+                                  <ToolDetailPre>{JSON.stringify(msg.toolResult, null, 2)}</ToolDetailPre>
+                                )}
+                              </>
                             )}
-                          </>
-                        )}
-                        {!msg.isToolCall && !msg.isToolResult && (
-                          msg.shouldStream ? (
-                            <StreamingText
-                              text={msg.text}
-                              enabled={true}
-                              wordsPerTick={4}
-                              tickInterval={25}
-                              components={markdownComponents}
-                            />
-                          ) : (
-                            <ReactMarkdown
-                              remarkPlugins={[remarkGfm]}
-                              components={markdownComponents}
-                            >
-                              {msg.text}
-                            </ReactMarkdown>
-                          )
-                        )}
-                        {/* Image Preview */}
-                        {msg.imageData && (
-                          <ImagePreviewContainer>
-                            <PreviewImage
-                              src={`data:image/png;base64,${msg.imageData}`}
-                              alt="Generated System Visualization"
-                              onClick={() => {
-                                // Open image in new tab for full view
-                                const win = window.open();
-                                if (win) {
-                                  win.document.write(`
+                            {!msg.isToolCall && !msg.isToolResult && (
+                              msg.shouldStream ? (
+                                <StreamingText
+                                  text={msg.text}
+                                  enabled={true}
+                                  wordsPerTick={4}
+                                  tickInterval={25}
+                                  components={markdownComponents}
+                                />
+                              ) : (
+                                <ReactMarkdown
+                                  remarkPlugins={[remarkGfm]}
+                                  components={markdownComponents}
+                                >
+                                  {msg.text}
+                                </ReactMarkdown>
+                              )
+                            )}
+                            {/* Image Preview */}
+                            {msg.imageData && (
+                              <ImagePreviewContainer>
+                                <PreviewImage
+                                  src={`data:image/png;base64,${msg.imageData}`}
+                                  alt="Generated System Visualization"
+                                  onClick={() => {
+                                    // Open image in new tab for full view
+                                    const win = window.open();
+                                    if (win) {
+                                      win.document.write(`
                                     <html><head><title>System Visualization</title></head>
                                     <body style="margin:0;background:#000;display:flex;justify-content:center;align-items:center;min-height:100vh;">
                                       <img src="data:image/png;base64,${msg.imageData}" style="max-width:100%;max-height:100vh;object-fit:contain;"/>
                                     </body></html>
                                   `);
-                                }
-                              }}
-                            />
-                            <ImageActions>
-                              <ImageActionButton
-                                className="primary"
-                                onClick={() => {
-                                  // Download image
-                                  const link = document.createElement('a');
-                                  link.href = `data:image/png;base64,${msg.imageData}`;
-                                  link.download = `system_visualization_${Date.now()}.png`;
-                                  link.click();
-                                }}
-                              >
-                                ⬇️ Download
-                              </ImageActionButton>
-                              <ImageActionButton
-                                className="secondary"
-                                onClick={() => {
-                                  const win = window.open();
-                                  if (win) {
-                                    win.document.write(`
+                                    }
+                                  }}
+                                />
+                                <ImageActions>
+                                  <ImageActionButton
+                                    className="primary"
+                                    onClick={() => {
+                                      // Download image
+                                      const link = document.createElement('a');
+                                      link.href = `data:image/png;base64,${msg.imageData}`;
+                                      link.download = `system_visualization_${Date.now()}.png`;
+                                      link.click();
+                                    }}
+                                  >
+                                    ⬇️ Download
+                                  </ImageActionButton>
+                                  <ImageActionButton
+                                    className="secondary"
+                                    onClick={() => {
+                                      const win = window.open();
+                                      if (win) {
+                                        win.document.write(`
                                       <html><head><title>System Visualization</title></head>
                                       <body style="margin:0;background:#000;display:flex;justify-content:center;align-items:center;min-height:100vh;">
                                         <img src="data:image/png;base64,${msg.imageData}" style="max-width:100%;max-height:100vh;object-fit:contain;"/>
                                       </body></html>
                                     `);
-                                  }
-                                }}
-                              >
-                                🔍 Full View
-                              </ImageActionButton>
-                            </ImageActions>
-                          </ImagePreviewContainer>
-                        )}
-                        {/* Video Preview */}
-                        {msg.videoUrl && (
-                          <ImagePreviewContainer>
-                            <PreviewVideo controls autoPlay={false}>
-                              <source src={msg.videoUrl} type="video/mp4" />
-                              Your browser does not support video playback.
-                            </PreviewVideo>
-                          </ImagePreviewContainer>
-                        )}
-                      </BubbleComponent>
-                    </div>
-                  );
-                })
-              )}
-                <div ref={messagesEndRef} />
-              </ChatContent>
-              <ScrollToBottomButton
-                $visible={showScrollToBottom}
-                onClick={scrollToBottom}
-                title="Scroll to bottom"
-              >
-                <FiChevronDown size={20} />
-              </ScrollToBottomButton>
-            </ChatContentWrapper>
+                                      }
+                                    }}
+                                  >
+                                    🔍 Full View
+                                  </ImageActionButton>
+                                </ImageActions>
+                              </ImagePreviewContainer>
+                            )}
+                            {/* Video Preview */}
+                            {msg.videoUrl && (
+                              <ImagePreviewContainer>
+                                <PreviewVideo controls autoPlay={false}>
+                                  <source src={msg.videoUrl} type="video/mp4" />
+                                  Your browser does not support video playback.
+                                </PreviewVideo>
+                              </ImagePreviewContainer>
+                            )}
+                            {/* Audio Preview */}
+                            {msg.audioData && (
+                              <div style={{ marginTop: '12px', padding: '12px', background: 'rgba(0,0,0,0.04)', borderRadius: '8px', border: '1px solid #e0e0e0' }}>
+                                <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#212121', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  <span>🔊</span> Cinematic Narration
+                                </div>
+                                <audio controls src={`data:audio/mp3;base64,${msg.audioData}`} style={{ width: '100%', height: '36px' }} />
+                              </div>
+                            )}
+                          </BubbleComponent>
+                        </div>
+                      );
+                    })
+                  )}
+                  <div ref={messagesEndRef} />
+                </ChatContent>
+                <ScrollToBottomButton
+                  $visible={showScrollToBottom}
+                  onClick={scrollToBottom}
+                  title="Scroll to bottom"
+                >
+                  <FiChevronDown size={20} />
+                </ScrollToBottomButton>
+              </ChatContentWrapper>
 
-            <Footer>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf,.txt,.md"
-                style={{ display: 'none' }}
-                onChange={handleFileSelect}
-              />
-
-              {/* Production limit message */}
-              {isProd && (
-                <div style={{
-                  padding: '8px 12px',
-                  marginBottom: '8px',
-                  backgroundColor: isLimitReached ? '#ffebee' : '#e3f2fd',
-                  borderRadius: '6px',
-                  fontSize: '0.85rem',
-                  textAlign: 'center',
-                  color: isLimitReached ? '#c62828' : '#1565c0'
-                }}>
-                  {isLimitReached
-                    ? '🚫 Generation limit reached (3/3)'
-                    : `⚡ ${generationsLeft} generation${generationsLeft !== 1 ? 's' : ''} left`}
-                </div>
-              )}
-
-              {/* TEXT INPUT FIRST - Main element like Antigravity */}
-              <TextInputContainer>
-                <IconButton title="Attach PDF or text file" onClick={handleAttachClick} disabled={isLimitReached}>
-                  <FiPaperclip size={18} />
-                </IconButton>
-                <StyledInput
-                  placeholder={isLimitReached ? "Generation limit reached" : (attachedFile ? "Describe what to build from the spec..." : "Upload a spec PDF to start, or type a request...")}
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  rows={3}
-                  disabled={isLimitReached}
+              <Footer>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.txt,.md"
+                  style={{ display: 'none' }}
+                  onChange={handleFileSelect}
                 />
-                <SendButton onClick={handleSendMessage} disabled={!inputValue.trim() || isLimitReached}>
-                  <FiSend size={16} />
-                </SendButton>
-              </TextInputContainer>
 
-              {/* SETTINGS BELOW TEXT INPUT - Model + Thinking Level */}
-              <SettingsRow>
-                <SettingGroup>
-                  <Select value={selectedModel} onChange={(e) => handleModelChange(e.target.value)}>
-                    <option value="gemini-3-flash-preview">⚡ Gemini 3 Flash</option>
-                    <option value="gemini-3-pro-preview">💎 Gemini 3 Pro</option>
-                  </Select>
-                </SettingGroup>
-                <SettingGroup>
-                  <Select value={thinkingLevel} onChange={(e) => setThinkingLevel(e.target.value)}>
-                    {getThinkingLevels(selectedModel).map(level => (
-                      <option key={level.value} value={level.value}>{level.label}</option>
-                    ))}
-                  </Select>
-                </SettingGroup>
-              </SettingsRow>
-            </Footer>
-          </Content>
-        </>
-      )}
-    </SidebarContainer>
+                {/* Production limit message */}
+                {isProd && (
+                  <div style={{
+                    padding: '8px 12px',
+                    marginBottom: '8px',
+                    backgroundColor: isLimitReached ? '#ffebee' : '#e3f2fd',
+                    borderRadius: '6px',
+                    fontSize: '0.85rem',
+                    textAlign: 'center',
+                    color: isLimitReached ? '#c62828' : '#1565c0'
+                  }}>
+                    {isLimitReached
+                      ? '🚫 Generation limit reached (3/3)'
+                      : `⚡ ${generationsLeft} generation${generationsLeft !== 1 ? 's' : ''} left`}
+                  </div>
+                )}
+
+                {/* TEXT INPUT FIRST - Main element like Antigravity */}
+                <TextInputContainer>
+                  <IconButton title="Attach PDF or text file" onClick={handleAttachClick} disabled={isLimitReached}>
+                    <FiPaperclip size={18} />
+                  </IconButton>
+                  <StyledInput
+                    placeholder={isLimitReached ? "Generation limit reached" : (attachedFile ? "Describe what to build from the spec..." : "Upload a spec PDF to start, or speak to VibIndu...")}
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    rows={3}
+                    disabled={isLimitReached}
+                  />
+                  <IconButton
+                    title="🎙️ Live Voice Mode – Speak to VibIndu"
+                    onClick={() => setIsLiveModeActive(true)}
+                    style={{
+                      background: isLiveModeActive ? 'linear-gradient(135deg, #4f46e5, #7c3aed)' : 'rgba(79, 70, 229, 0.1)',
+                      color: isLiveModeActive ? 'white' : '#4f46e5',
+                      borderRadius: '8px',
+                      padding: '8px 10px',
+                      fontSize: '1.2rem',
+                      lineHeight: 1,
+                      border: '1px solid rgba(79, 70, 229, 0.2)',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+                    }}
+                  >
+                    🎙️
+                  </IconButton>
+                  {/* Computer Use and Storyteller temporarily disabled for Live Agent Challenge focus */}
+                  {/* 
+                  <IconButton ... />
+                  <IconButton ... />
+                  */}
+                  <SendButton onClick={handleSendMessage} disabled={!inputValue.trim() || isLimitReached}>
+                    <FiSend size={16} />
+                  </SendButton>
+                </TextInputContainer>
+
+                {/* SETTINGS BELOW TEXT INPUT - Model + Thinking Level */}
+                <SettingsRow>
+                  <SettingGroup>
+                    <Select value={selectedModel} onChange={(e) => handleModelChange(e.target.value)}>
+                      <option value="gemini-3.1-flash-lite-preview">⚡ Gemini 3.1 Flash Lite</option>
+                      <option value="gemini-3-pro-preview">💎 Gemini 3 Pro</option>
+                      <option value="gemini-3.1-pro-preview">💎 Gemini 3.1 Pro (Preview)</option>
+                    </Select>
+                  </SettingGroup>
+                  <SettingGroup>
+                    <Select value={thinkingLevel} onChange={(e) => setThinkingLevel(e.target.value)}>
+                      {getThinkingLevels(selectedModel).map(level => (
+                        <option key={level.value} value={level.value}>{level.label}</option>
+                      ))}
+                    </Select>
+                  </SettingGroup>
+                </SettingsRow>
+              </Footer>
+            </Content>
+          </>
+        )}
+        {/* Hidden SFC Thumbnail Renderers */}
+        {pendingSfcRenders.map((sfc, idx) => (
+          <SfcThumbnailRenderer
+            key={`${sfc.name}-${idx}`}
+            diagram={sfc.sfc_content}
+            onRendered={(imageData) => {
+              console.log(`[VibeSidebar] ✅ SFC Thumbnail rendered for ${sfc.name}`);
+              // Add message to chat with the image
+              addMessage({
+                text: `✅ **SFC Generated: ${sfc.name}**\n\nMode: **${sfc.mode_id || 'Global'}**\nPath: \`${sfc.path}\``,
+                isUser: false,
+                agent: 'SFC Programmer',
+                imageData: imageData.split(',')[1] // Just the base64 part
+              } as any);
+
+              // Remove from pending
+              setPendingSfcRenders(prev => prev.filter(item => item !== sfc));
+            }}
+          />
+        ))}
+
+        {/* Live Agent Mode – integrated voice overlay within sidebar */}
+        {isLiveModeActive && (
+          <LiveAgentMode
+            onDispatch={(query) => {
+              handleSendFromLive(query);
+            }}
+            onClose={() => setIsLiveModeActive(false)}
+            projectPath={currentProject?.localPath}
+          />
+        )}
+
+        {isComputerModeActive && (
+          <ComputerAgentMode
+            onClose={() => setIsComputerModeActive(false)}
+          />
+        )}
+
+        {isStorytellerModeActive && (
+          <StorytellerMode
+            onClose={() => setIsStorytellerModeActive(false)}
+            projectPath={currentProject?.localPath}
+          />
+        )}
+
+      </SidebarContainer>
+    </>
   );
 };
 

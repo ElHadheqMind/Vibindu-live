@@ -447,7 +447,7 @@ export const useProjectStore = create<ProjectState>()(
         })),
         currentProjectId: state.currentProjectId,
         currentDiagramId: state.currentDiagramId,
-        remoteProjects: state.remoteProjects,
+        // remoteProjects: omitted from localStorage to ensure fresh fetch
       }),
       onRehydrateStorage: () => (state) => {
         // After store is rehydrated from localStorage, load simulation and vibe chat data

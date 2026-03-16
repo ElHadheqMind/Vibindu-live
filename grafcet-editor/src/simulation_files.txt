@@ -1,6 +1,0 @@
-﻿C:\Users\pc\Desktop\G7V0101\GAI\grafcet-editor\src\components\Modals\ComparisonBuilder.tsx
-C:\Users\pc\Desktop\G7V0101\GAI\grafcet-editor\src\components\Modals\TransitionPropertiesModal.tsx
-C:\Users\pc\Desktop\G7V0101\GAI\grafcet-editor\src\components\Simulation\SimulationModal.tsx
-C:\Users\pc\Desktop\G7V0101\GAI\grafcet-editor\src\components\UI\ActionSelect.tsx
-C:\Users\pc\Desktop\G7V0101\GAI\grafcet-editor\src\components\UI\ExpressionInput.tsx
-C:\Users\pc\Desktop\G7V0101\GAI\grafcet-editor\src\store\useSimulationStore.ts

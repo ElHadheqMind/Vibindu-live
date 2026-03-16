@@ -367,7 +367,21 @@ export class FileSystemService {
               folders,
               lastModified: metadata?.lastModified?.toISOString() || new Date().toISOString()
             });
+            continue;
           }
+
+          // If the folder is lacking project.json or main.gsrsm, it might be an incomplete project.
+          // We still return it so the user can see and delete it from the Recent Projects list.
+          const files = await this.storage.listDirectory(itemPath);
+          const hasSfc = files.some(f => f.name.endsWith('.sfc'));
+          
+          projects.push({
+            type: hasSfc ? 'grafcet' : 'gsrsm', // Default type based on contents
+            name: item.name,
+            path: this.storage.getAbsolutePath(itemPath),
+            files: files.map(f => f.name),
+            lastModified: metadata?.lastModified?.toISOString() || new Date().toISOString()
+          });
         }
       }
 

@@ -37,10 +37,9 @@ export class RenderService {
     // Try multiple image models in order until one works
     // Includes Gemini models and Imagen 4 variants
     private imageModels = [
+        'gemini-3.1-flash-image-preview',
         'gemini-3-pro-image-preview',
-        'gemini-2.5-flash-preview-image-generation',
-        'imagen-4.0-fast-generate-001',
-        'imagen-4.0-generate-001'
+        'imagen-4.0-fast-generate-001'
     ];
 
     constructor() {
@@ -233,7 +232,7 @@ export class RenderService {
         const rendersDir = path.resolve(process.cwd(), '..', projectPath, 'renders');
         try {
             await fs.mkdir(rendersDir, { recursive: true });
-        } catch {}
+        } catch { }
 
         // Save to filesystem directly (more reliable)
         const fullPath = path.resolve(process.cwd(), '..', projectPath, 'renders', imageName);
@@ -269,7 +268,10 @@ Style: Photorealistic 3D render, as if photographed in a real factory
 Lighting: Industrial LED lighting from above, realistic shadows
 Environment: Clean modern factory floor with safety markings
 Camera angle: Isometric view showing the complete system layout
-Quality: High detail on sensors, motors, and mechanical components`;
+Quality: High detail on sensors, motors, and mechanical components
+
+if spec in frensh all output should be in frensh
+if english output english`;
     }
 
     /**
@@ -443,7 +445,10 @@ Animate the following realistic sequence:
 Visual style: Photorealistic factory environment, industrial lighting
 Motion: Smooth mechanical movements, realistic physics
 Sound: Factory ambience - conveyor hum, pneumatic hiss, motor whir, sensor beeps
-Camera: Slight slow pan to show the complete system in operation`;
+Camera: Slight slow pan to show the complete system in operation
+
+if spec in frensh all output should be in frensh
+if english output english`;
     }
 
     /**

@@ -6,7 +6,8 @@ const ProtectedRoute: React.FC = () => {
   const { isAuthenticated } = useAuthStore();
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    // Redirect to login page instead of landing page
+    return <Navigate to="/" replace />;
   }
 
   return <Outlet />;

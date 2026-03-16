@@ -224,9 +224,10 @@ interface TopMenuProps {
   onToggleVibe?: () => void;
   sidebarVisible?: boolean;
   onToggleSidebar?: () => void;
+  showAI?: boolean;
 }
 
-const TopMenu: React.FC<TopMenuProps> = ({ stageRef, onToggleVibe, sidebarVisible, onToggleSidebar }) => {
+const TopMenu: React.FC<TopMenuProps> = ({ stageRef, onToggleVibe, sidebarVisible, onToggleSidebar, showAI = true }) => {
   const navigate = useNavigate();
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const { isSimulationModalOpen, setSimulationModalOpen } = useSimulationStore();
@@ -298,6 +299,10 @@ const TopMenu: React.FC<TopMenuProps> = ({ stageRef, onToggleVibe, sidebarVisibl
   };
 
   // --- Handlers ---
+
+  const getActiveDiagram = () => {
+    return getCurrentDiagram() || useGsrsmFileStore.getState().currentDiagram;
+  };
 
   const handleNewProject = () => { closeMenus(); useCreateProjectModalStore.getState().openModal(); };
   const handleOpenProject = () => { closeMenus(); navigate('/open-project'); };
@@ -429,14 +434,23 @@ const TopMenu: React.FC<TopMenuProps> = ({ stageRef, onToggleVibe, sidebarVisibl
 
   // Tools
   const handleExportToPng = () => {
-    const d = getCurrentDiagram();
+    const d = getActiveDiagram();
     if (!d || !stageRef.current) return usePopupStore.getState().showWarning('Error', 'No diagram or canvas ready.');
-    exportToPng(stageRef, d, { hideGrid: true }); closeMenus();
+    const selectedIds = useElementsStore.getState().selectedElementIds;
+    exportToPng(stageRef, d, {
+      hideGrid: true,
+      exportSelectedOnly: selectedIds.length > 0
+    });
+    closeMenus();
   };
   const handleExportToPdf = () => {
-    const d = getCurrentDiagram();
+    const d = getActiveDiagram();
     if (!d || !stageRef.current) return usePopupStore.getState().showWarning('Error', 'No diagram or canvas ready.');
-    import('../../utils/exportUtils').then(({ exportToPdf }) => exportToPdf(stageRef, d, { hideGrid: true }));
+    const selectedIds = useElementsStore.getState().selectedElementIds;
+    import('../../utils/exportUtils').then(({ exportToPdf }) => exportToPdf(stageRef, d, {
+      hideGrid: true,
+      exportSelectedOnly: selectedIds.length > 0
+    }));
     closeMenus();
   };
   const handleValidate = () => {
@@ -543,10 +557,12 @@ const TopMenu: React.FC<TopMenuProps> = ({ stageRef, onToggleVibe, sidebarVisibl
         </CenterSection>
 
         <RightSection>
-          <ActionButton onClick={onToggleVibe} style={{ color: '#00d4ff', fontWeight: 600 }}>
-            <span style={{ fontSize: '1.2rem' }}>⚛️</span>
-            <span>AI</span>
-          </ActionButton>
+          {showAI && (
+            <ActionButton onClick={onToggleVibe} style={{ color: '#00d4ff', fontWeight: 600 }}>
+              <span style={{ fontSize: '1.2rem' }}>⚛️</span>
+              <span>AI</span>
+            </ActionButton>
+          )}
 
           <VerticalDivider />
 

@@ -6,8 +6,8 @@ export const DEFAULT_ACTION_BLOCK_SIZE = { width: 120, height: 40 };
 export const DEFAULT_GATE_SIZE = { width: 40, height: 8 };
 
 export const GUIDED_STEP_SPACING_VERTICAL = 140;
-export const GUIDED_STEP_SPACING_HORIZONTAL = 300;
-export const GUIDED_DIVERGENCE_SPACING = 200;
+export const GUIDED_STEP_SPACING_HORIZONTAL = 200;
+export const GUIDED_DIVERGENCE_SPACING = 800;
 
 // Offsets for "Guided Mode" look
 // Standard Normal Step -> Transition (140px total vertical spacing: 40 + 47 + 6 + 47 = 140)

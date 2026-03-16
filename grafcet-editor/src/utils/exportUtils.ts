@@ -7,23 +7,41 @@ export interface ExportOptions {
   whiteBackground?: boolean;
   cropToContent?: boolean;
   pixelRatio?: number;
+  exportSelectedOnly?: boolean;
 }
 
-// Internal helper to get export data URL
-const getExportDataUrlInternal = async (stage: Konva.Stage, options: ExportOptions): Promise<{ dataURL: string, rect?: { x: number, y: number, width: number, height: number } }> => {
-  return new Promise((resolve) => {
-    withExportFormatting(stage, options, (rect) => {
-      const dataURL = stage.toDataURL({
-        pixelRatio: options.pixelRatio || 2,
-        mimeType: 'image/png',
-        x: rect?.x,
-        y: rect?.y,
-        width: rect?.width,
-        height: rect?.height,
-      });
-      resolve({ dataURL, rect });
-    });
+// Internal helper to get export data URL with white background
+const getExportDataUrlInternal = (stage: Konva.Stage, options: ExportOptions, rect?: { x: number, y: number, width: number, height: number }): string => {
+  const pixelRatio = options.pixelRatio || 2;
+
+  // Use toCanvas to get a canvas element
+  const stageCanvas = stage.toCanvas({
+    pixelRatio,
+    x: rect?.x,
+    y: rect?.y,
+    width: rect?.width,
+    height: rect?.height,
   });
+
+  if (!options.whiteBackground) {
+    return stageCanvas.toDataURL('image/png');
+  }
+
+  // Create a new canvas to add white background
+  const finalCanvas = document.createElement('canvas');
+  finalCanvas.width = stageCanvas.width;
+  finalCanvas.height = stageCanvas.height;
+  const ctx = finalCanvas.getContext('2d');
+
+  if (ctx) {
+    // Fill with white
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
+    // Draw the stage canvas on top
+    ctx.drawImage(stageCanvas, 0, 0);
+  }
+
+  return finalCanvas.toDataURL('image/png');
 };
 
 /**
@@ -32,7 +50,12 @@ const getExportDataUrlInternal = async (stage: Konva.Stage, options: ExportOptio
  */
 export const getDiagramImage = async (stage: Konva.Stage, options: ExportOptions = {}): Promise<string> => {
   const mergedOptions = { hideGrid: true, whiteBackground: true, cropToContent: true, ...options };
-  const { dataURL } = await getExportDataUrlInternal(stage, mergedOptions);
+  let dataURL = '';
+
+  withExportFormatting(stage, mergedOptions, (rect) => {
+    dataURL = getExportDataUrlInternal(stage, mergedOptions, rect);
+  });
+
   return dataURL;
 };
 
@@ -45,7 +68,27 @@ const withExportFormatting = (stage: Konva.Stage, options: ExportOptions, callba
     gridLayer.hide();
   }
 
-  let backgroundRect: Konva.Rect | undefined;
+  // Handle selected only export
+  const hiddenNodes: Konva.Node[] = [];
+  if (options.exportSelectedOnly) {
+    stage.find('.element').forEach(node => {
+      // Check if the node is "selected" based on Konva attributes or data
+      const isSelected = (node as any).attrs.selected === true;
+      if (!isSelected && node.visible()) {
+        node.hide();
+        hiddenNodes.push(node);
+      }
+    });
+
+    stage.find('.connection').forEach(node => {
+      const isSelected = (node as any).attrs.selected === true;
+      if (!isSelected && node.visible()) {
+        node.hide();
+        hiddenNodes.push(node);
+      }
+    });
+  }
+
   let exportRect: { x: number, y: number, width: number, height: number } | undefined;
 
   // Calculate content rect if needed
@@ -58,6 +101,7 @@ const withExportFormatting = (stage: Konva.Stage, options: ExportOptions, callba
 
     layers.forEach(layer => {
       const children = layer.getChildren((node) => {
+        // Only include visible non-grid elements
         return node.visible() && node.name() !== 'grid-layer';
       });
 
@@ -85,35 +129,16 @@ const withExportFormatting = (stage: Konva.Stage, options: ExportOptions, callba
     }
   }
 
-  // Add white background if needed
-  if (options.whiteBackground) {
-    const layer = stage.getLayers()[0];
-    if (layer) {
-      // Create background that covers exactly the export area
-      const rect = exportRect || { x: 0, y: 0, width: stage.width(), height: stage.height() };
-      backgroundRect = new Konva.Rect({
-        x: rect.x,
-        y: rect.y,
-        width: rect.width,
-        height: rect.height,
-        fill: 'white',
-        listening: false,
-      });
-      layer.add(backgroundRect);
-      backgroundRect.moveToBottom();
-    }
-  }
-
   try {
     const result = callback(exportRect);
     if (result instanceof Promise) {
-      // Since toDataURL is synchronous, we don't necessarily need to await here 
-      // unless the callback has other async work.
+      // If async, we need to wait for it before restoring state
+      // This is used by exportGsrsmToPdf
     }
   } finally {
-    if (backgroundRect) {
-      backgroundRect.destroy();
-    }
+    // Restore hidden nodes
+    hiddenNodes.forEach(node => node.show());
+
     if (options.hideGrid && gridLayer && wasVisible) {
       gridLayer.show();
     }
@@ -128,14 +153,7 @@ export const exportToPng = (stageRef: React.RefObject<Konva.Stage>, diagram: Gra
   const mergedOptions = { hideGrid: true, whiteBackground: true, cropToContent: true, pixelRatio: 2, ...options };
 
   withExportFormatting(stage, mergedOptions, (rect) => {
-    const dataURL = stage.toDataURL({
-      pixelRatio: mergedOptions.pixelRatio,
-      mimeType: 'image/png',
-      x: rect?.x,
-      y: rect?.y,
-      width: rect?.width,
-      height: rect?.height,
-    });
+    const dataURL = getExportDataUrlInternal(stage, mergedOptions, rect);
 
     // Create download link
     const link = document.createElement('a');
@@ -159,14 +177,7 @@ export const exportToPdf = (stageRef: React.RefObject<Konva.Stage>, diagram: Gra
     const width = rect?.width || stage.width();
     const height = rect?.height || stage.height();
 
-    const dataURL = stage.toDataURL({
-      pixelRatio: mergedOptions.pixelRatio,
-      mimeType: 'image/png',
-      x: rect?.x,
-      y: rect?.y,
-      width: rect?.width,
-      height: rect?.height,
-    });
+    const dataURL = getExportDataUrlInternal(stage, mergedOptions, rect);
 
     const orientation = width > height ? 'l' : 'p';
     const pdf = new jsPDF({
@@ -231,15 +242,8 @@ export const exportGsrsmToPdf = async (stageRef: React.RefObject<Konva.Stage>, p
       const width = rect?.width || stage.width();
       const height = rect?.height || stage.height();
 
-      // Create a data URL of the stage
-      const dataURL = stage.toDataURL({
-        pixelRatio: 2, // Higher quality
-        mimeType: 'image/png',
-        x: rect?.x,
-        y: rect?.y,
-        width: rect?.width,
-        height: rect?.height,
-      });
+      // Create a data URL of the stage using the canvas helper
+      const dataURL = getExportDataUrlInternal(stage, mergedOptions, rect);
 
       // Create a new PDF document
       // Use landscape orientation if width > height

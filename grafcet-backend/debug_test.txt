@@ -1,4 +1,0 @@
-﻿DEBUG_START
-400
-{"success":false,"error":"Invalid or inaccessible directory for the project: C:\\Users\\pc\\Documents\\GrafcetProjects"}
-DEBUG_END

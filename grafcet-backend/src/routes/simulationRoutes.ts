@@ -10,7 +10,7 @@ const router = express.Router();
 const storage = getStorageService();
 
 // Agent broadcast URL (Python orchestrator forwards to WebSocket clients)
-const AGENT_BROADCAST_URL = 'http://127.0.0.1:8000/api/broadcast';
+const AGENT_BROADCAST_URL = 'http://127.0.0.1:3002/api/broadcast';
 
 /**
  * Broadcast a message to connected frontend clients via the orchestrator

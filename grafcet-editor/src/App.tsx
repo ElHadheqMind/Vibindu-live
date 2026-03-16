@@ -1,7 +1,8 @@
 import React, { Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './store/useAuthStore';
-import LoginPage from './components/Auth/LoginPage';
+import LandingPage from './components/Auth/LoginPage'; // Landing page with Request Access
+import UserLoginPage from './components/Auth/UserLoginPage'; // Login page for users with credentials
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 
 // Lazy load heavy components to avoid side-effects (like Konva initialization) affecting the Login Page
@@ -31,13 +32,18 @@ function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/login" element={!isAuthenticated ? <LoginPage /> : <Navigate to="/" replace />} />
+        {/* Public routes */}
+        <Route path="/login" element={!isAuthenticated ? <UserLoginPage /> : <Navigate to="/welcome" replace />} />
+        <Route path="/landing" element={!isAuthenticated ? <LandingPage /> : <Navigate to="/welcome" replace />} />
+        {/* Root route: unauthenticated → login page, authenticated → MainApp (preserves ?project= params) */}
+        <Route path="/" element={!isAuthenticated ? <LandingPage /> : (
+          <Suspense fallback={<LoadingFallback />}>
+            <MainApp />
+          </Suspense>
+        )} />
+
+        {/* Protected routes */}
         <Route element={<ProtectedRoute />}>
-          <Route path="/" element={
-            <Suspense fallback={<LoadingFallback />}>
-              <MainApp />
-            </Suspense>
-          } />
           <Route path="/welcome" element={
             <Suspense fallback={<LoadingFallback />}>
               <MainApp />

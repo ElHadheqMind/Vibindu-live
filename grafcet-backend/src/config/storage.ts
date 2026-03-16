@@ -13,8 +13,16 @@ import os from 'os';
 // Get the base storage path from environment or use default
 const getStoragePath = (): string => {
     // Check for STORAGE_PATH environment variable
-    if (process.env.STORAGE_PATH) {
-        return process.env.STORAGE_PATH;
+    let envPath = process.env.STORAGE_PATH;
+
+    // Detect if we are on Linux/Docker but the provided path looks like a Windows path (e.g. from a copied .env file)
+    if (envPath && process.platform !== 'win32' && /^[a-zA-Z]:/.test(envPath)) {
+        console.warn(`[StorageConfig] Detected Windows STORAGE_PATH on Linux: "${envPath}". Ignoring and using default.`);
+        envPath = undefined;
+    }
+
+    if (envPath) {
+        return envPath;
     }
 
     // Default to Documents/GrafcetProjects folder

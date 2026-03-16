@@ -61,7 +61,7 @@ interface GsrsmState {
   deselectAllModes: () => void;
   highlightMode: (id: string) => void;
   activateMode: (id: string) => void;
-  deactivateMode: (id: string) => void;
+  deactivateMode: (id: string, deleteFolder?: boolean) => Promise<void>;
 
   // Canvas actions
   setScale: (scale: number) => void;
@@ -110,7 +110,30 @@ export const useGsrsmStore = create<GsrsmState>()(
         const { project } = get();
         if (!project) return;
 
-        const currentModes = project.diagram.modes || [];
+        // Guard: if project has no diagram property, initialize it
+        if (!project.diagram) {
+          const now = new Date().toISOString();
+          set((state) => ({
+            project: state.project ? {
+              ...state.project,
+              diagram: {
+                id: 'diagram-default',
+                name: state.project.name || 'GSRSM',
+                modes: [],
+                connections: [],
+                version: '1.0',
+                createdAt: now,
+                updatedAt: now
+              }
+            } : null
+          }));
+        }
+
+        // Re-read after potential initialization
+        const updatedProject = get().project;
+        if (!updatedProject?.diagram) return;
+
+        const currentModes = updatedProject.diagram.modes || [];
         const missingModes = STANDARD_MODES_DEFINITIONS.filter(
           def => !currentModes.some(m => m.code === def.code)
         );
@@ -133,7 +156,7 @@ export const useGsrsmStore = create<GsrsmState>()(
         }
 
         // Ensure standard connections
-        const currentConnections = project.diagram.connections || [];
+        const currentConnections = updatedProject.diagram.connections || [];
         const missingConnections = STANDARD_CONNECTION_IDS.filter(
           id => !currentConnections.some(c => c.id === id)
         );
@@ -156,7 +179,7 @@ export const useGsrsmStore = create<GsrsmState>()(
             project: state.project ? {
               ...state.project,
               diagram: {
-                ...state.project.diagram,
+                ...(state.project.diagram || {}),
                 modes: updatedModes,
                 connections: updatedConnections
               }
@@ -168,8 +191,23 @@ export const useGsrsmStore = create<GsrsmState>()(
       },
 
       loadProject: (project: GsrsmProject) => {
-        set({ project });
+        // Ensure project has a diagram property before storing
+        const now = new Date().toISOString();
+        const safeProject = {
+          ...project,
+          diagram: project.diagram || {
+            id: 'diagram-default',
+            name: project.name || 'GSRSM',
+            modes: [],
+            connections: [],
+            version: '1.0',
+            createdAt: now,
+            updatedAt: now
+          }
+        };
+        set({ project: safeProject });
         get().ensureStandardModes();
+        // NOTE: IO/simulation data is loaded centrally by useAutoRefresh hook
       },
 
       updateProject: (updates: Partial<GsrsmProject>) => {
@@ -509,12 +547,26 @@ export const useGsrsmStore = create<GsrsmState>()(
         }
       },
 
-      deactivateMode: async (id) => {
+      deactivateMode: async (id, deleteFolder = false) => {
         const { getModeById, updateMode, saveProject, project } = get();
         const mode = getModeById(id);
 
         if (mode && mode.type === 'active' && project) {
-          // Simply deactivate mode, keep folder (safe default)
+          // If deleteFolder is true, call the API to remove it
+          if (deleteFolder && project.localPath) {
+            try {
+              const response = await ApiService.deleteModeFolder(project.localPath, mode.code);
+              if (response.success) {
+                console.log(`Successfully deleted folder for mode ${mode.code}`);
+              } else {
+                console.warn(`Failed to delete folder for mode ${mode.code}:`, response.error);
+              }
+            } catch (error) {
+              console.error(`Error deleting folder for mode ${mode.code}:`, error);
+            }
+          }
+
+          // Simply deactivate mode
           updateMode(id, { type: 'normal', activated: false });
 
           // Automatically save the project when a mode is deactivated
@@ -522,7 +574,7 @@ export const useGsrsmStore = create<GsrsmState>()(
             saveProject().catch(error => {
               console.error('Failed to auto-save project after mode deactivation:', error);
             });
-          }, 100); // Small delay to ensure state is updated
+          }, 1000); // Small delay to ensure state is updated
         }
       },
 
@@ -583,6 +635,7 @@ export const useGsrsmStore = create<GsrsmState>()(
         scale: state.scale,
         offset: state.offset,
       }),
+      // NOTE: IO/simulation data is loaded centrally by useAutoRefresh hook on mount
     }
   )
 );

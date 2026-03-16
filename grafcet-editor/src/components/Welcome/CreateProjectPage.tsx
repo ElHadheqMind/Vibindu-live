@@ -260,11 +260,11 @@ const CreateProjectPage: React.FC = () => {
         // Navigate to the project path to auto-open it
         const projectPath = response.projectPath || (response.project as GrafcetProject).localPath;
         if (projectPath) {
-          // Navigate using the project query parameter for compatibility
-          window.location.href = `/?project=${encodeURI(projectPath)}`;
+          // Navigate within the React Router context to preserve auth state (no full reload)
+          navigate(`/welcome?project=${encodeURIComponent(projectPath)}`, { replace: true });
         } else {
           // Fallback to basic navigation
-          navigate('/', {
+          navigate('/welcome', {
             replace: true,
             state: {
               projectCreated: true,

@@ -239,18 +239,16 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect }) => {
         isLoading,
         loadFileTree,
         toggleExpanded,
-        setSelected,
-        applyExpandedState
+        setSelected
     } = useFileExplorerStore();
 
     const currentProject = getGrafcetProject() || gsrsmProject;
-    const activeModesCount = gsrsmProject?.diagram?.modes?.filter(m => m.type === 'active').length || 0;
 
     // Load file tree on mount and when project changes
     useEffect(() => {
         const targetPath = currentProject?.localPath || '';
         loadFileTree(targetPath);
-    }, [currentProject?.localPath, activeModesCount]);
+    }, [currentProject?.localPath]);
 
     // Toggle folder expansion using the store
     const handleToggleFolder = (path: string) => {
@@ -463,7 +461,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ onFileSelect }) => {
                             onClick={(e) => e.stopPropagation()}
                         />
                     ) : (
-                        <FileName>{node.name}</FileName>
+                        <FileName>{node.name === 'Story.html' ? 'Story' : node.name}</FileName>
                     )}
                 </TreeItem>
                 {node.type === 'folder' && node.isExpanded && node.children && (

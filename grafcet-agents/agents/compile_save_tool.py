@@ -14,6 +14,8 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+BACKEND_URL = os.getenv("BACKEND_URL", "http://backend:3001" if os.getenv("IS_DOCKER", "false").lower() == "true" else "http://localhost:3001")
+STORAGE_PATH = os.getenv("STORAGE_PATH", "")
 
 class CompileAndSaveSFCTool(BaseTool):
     """Compiles SFC DSL code and saves it as a JSON diagram file.
@@ -24,8 +26,8 @@ class CompileAndSaveSFCTool(BaseTool):
 
     def __init__(
         self,
-        compile_url: str = "http://localhost:3001/api/sfc/compile",
-        save_url: str = "http://localhost:3001/api/files/save-diagram"
+        compile_url: str = f"{BACKEND_URL}/api/sfc/compile",
+        save_url: str = f"{BACKEND_URL}/api/files/save-diagram"
     ):
         super().__init__(
             name="CompileAndSaveSFC",
@@ -66,6 +68,10 @@ class CompileAndSaveSFCTool(BaseTool):
                 - message (str): Status message
                 - error (str): Error message if failed
         """
+        # Fallback to context state if LLM forgets project_path
+        if not project_path and tool_context is not None:
+            project_path = tool_context.state.get("project_path", "")
+
         # Construct path based on mode_id
         if mode_id:
             target_dir = f"{project_path}/modes/{mode_id}"
@@ -98,25 +104,30 @@ class CompileAndSaveSFCTool(BaseTool):
                             "error": f"Compiler returned no SFC data for '{sfc_name}'"
                         }
 
-                # 2. Save locally (bypass backend storage restrictions)
-                # Ensure we use .sfc extension as requested
+                # 2. Save via Backend API (works with Cloud Run GCS driver)
                 target_filename = f"{sfc_name}.sfc" if not sfc_name.endswith(".sfc") else sfc_name
-                # Ensure we use valid OS separators
-                full_target_dir = os.path.normpath(target_dir)
-                full_target_path = os.path.join(full_target_dir, target_filename)
                 
-                # Ensure directory exists
-                if not os.path.exists(full_target_dir):
-                    try:
-                        os.makedirs(full_target_dir, exist_ok=True)
-                    except Exception as e:
-                         return {"success": False, "error": f"Failed to create directory {full_target_dir}: {str(e)}"}
-
+                # Use forward slash for the relative GCS path
+                relative_target_dir = target_dir.replace("\\", "/")
+                diagram_path = f"{relative_target_dir}/{target_filename}"
+                
                 try:
-                    async with aiofiles.open(full_target_path, mode='w') as f:
-                        await f.write(json.dumps(generated_sfc, indent=2))
+                    save_payload = {
+                        "diagramPath": diagram_path,
+                        "diagram": generated_sfc
+                    }
+                    async with session.post(self.save_url, json=save_payload) as save_resp:
+                        if save_resp.status != 200:
+                            save_err = await save_resp.text()
+                            raise Exception(f"Backend API save failed: {save_err}")
+                            
+                        save_data = await save_resp.json()
+                        if not save_data.get("success"):
+                            raise Exception(save_data.get("error", "Unknown backend error"))
+                            
+                        full_target_path = save_data.get("savedPath", diagram_path)
 
-                    logger.info(f"[{self.name}] Saved locally to {full_target_path}")
+                    logger.info(f"[{self.name}] Saved successfully via API to {diagram_path}")
 
                     # SFC file metadata for state tracking
                     # ADK 2026: Store BOTH metadata AND sfc_code for SimulationAgent access
@@ -136,14 +147,17 @@ class CompileAndSaveSFCTool(BaseTool):
                         tool_context.state["sfc_files"].append(sfc_file)
                         logger.info(f"[{self.name}] Appended sfc_file to tool_context.state['sfc_files']")
 
-                    # Broadcast project_reload to trigger frontend auto-refresh
+                    # Broadcast sfc_generated to trigger frontend image generation and chat update
                     try:
                         async with session.post(
                             "http://127.0.0.1:8000/api/broadcast",
-                            json={"payload": {"type": "project_reload"}}
+                            json={"payload": {
+                                "type": "sfc_generated",
+                                "sfc_file": sfc_file
+                            }}
                         ) as broadcast_resp:
                             if broadcast_resp.status == 200:
-                                logger.info(f"[{self.name}] Broadcast project_reload sent")
+                                logger.info(f"[{self.name}] Broadcast sfc_generated sent")
                     except Exception as be:
                         logger.warning(f"[{self.name}] Broadcast failed (non-critical): {be}")
 

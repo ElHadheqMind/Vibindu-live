@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import aiohttp
 from typing import Optional
 from base_tool import BaseTool
@@ -12,6 +13,7 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+BACKEND_URL = os.getenv("BACKEND_URL", "http://backend:3001" if os.getenv("IS_DOCKER", "false").lower() == "true" else "http://localhost:3001")
 
 class ProjectIOTool(BaseTool):
     """Validates and applies Actions and Transition Variables to the current project.
@@ -20,7 +22,7 @@ class ProjectIOTool(BaseTool):
     Writes to: tool_context.state['io_data']
     """
 
-    def __init__(self, api_url: str = "http://localhost:3001/api/simulation/save"):
+    def __init__(self, api_url: str = f"{BACKEND_URL}/api/simulation/save"):
         super().__init__(
             name="ProjectIOTool",
             description="Validates and applies Actions and Transition Variables to the current project.",
@@ -59,6 +61,10 @@ class ProjectIOTool(BaseTool):
                 - savedPath (str): Path where config was saved
                 - stats (dict): Count of actions and transitions saved
         """
+        # Fallback to context state if LLM forgets project_path
+        if not project_path and tool_context is not None:
+            project_path = tool_context.state.get("project_path", "")
+
         logger.info(f"[{self.name}] Processing IO for project: {project_path}")
         
         # 1. Validation

@@ -24,6 +24,7 @@ interface FileExplorerState {
     fileTreeCache: FileNode[];
     isLoading: boolean;
     error: string | null;
+    lastLoadedPath: string; // track the last path used so socket refresh stays scoped
 
     // Actions
     toggleExpanded: (path: string) => void;
@@ -44,6 +45,7 @@ export const useFileExplorerStore = create<FileExplorerState>()(
             fileTreeCache: [],
             isLoading: false,
             error: null,
+            lastLoadedPath: '',
 
             toggleExpanded: (path: string) => {
                 const normalizedPath = path.replace(/\\/g, '/');
@@ -93,10 +95,25 @@ export const useFileExplorerStore = create<FileExplorerState>()(
             },
 
             loadFileTree: async (targetPath?: string) => {
+                // If a non-empty path is given, remember it; otherwise reuse the last known path
+                const resolvedPath = (targetPath !== undefined && targetPath !== '')
+                    ? targetPath
+                    : get().lastLoadedPath;
+
+                if (!resolvedPath) {
+                    // No project path known yet — do not load a generic root
+                    set({ isLoading: false });
+                    return;
+                }
+
+                if (targetPath !== undefined && targetPath !== '') {
+                    set({ lastLoadedPath: targetPath });
+                }
+
                 set({ isLoading: true, error: null });
 
                 try {
-                    const data = await ApiService.getFileTree(targetPath || '');
+                    const data = await ApiService.getFileTree(resolvedPath);
 
                     if (data.success && data.tree) {
                         const children = data.tree.children || [];
@@ -161,12 +178,14 @@ export const useFileExplorerStore = create<FileExplorerState>()(
                     socketStore.connect();
 
                     const handleRefresh = () => {
-                        console.log('🔄 File event received, refreshing explorer...');
-                        const { loadFileTree } = get();
-                        // Reload tree with current view context
-                        loadFileTree();
+                        const { loadFileTree, lastLoadedPath } = get();
+                        if (!lastLoadedPath) return; // No project open — skip
+                        console.log('🔄 File event received, refreshing explorer for:', lastLoadedPath);
+                        // Use the stored project path so we never reload the user root
+                        loadFileTree(lastLoadedPath);
                     };
 
+                    socketStore.subscribe('file:changed', handleRefresh);
                     socketStore.subscribe('file:created', handleRefresh);
                     socketStore.subscribe('file:deleted', handleRefresh);
                     socketStore.subscribe('dir:created', handleRefresh);

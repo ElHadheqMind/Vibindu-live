@@ -1,13 +1,16 @@
-# Python stage
+# Python stage — lightweight for Cloud Run
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies
-# gcc/python3-dev might be needed for some python packages
+# Install minimal system dependencies (no browser, no display server)
 RUN apt-get update && apt-get install -y \
     gcc \
     python3-dev \
+    libgl1 \
+    libpng-dev \
+    procps \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements
@@ -24,9 +27,14 @@ ENV PYTHONUNBUFFERED=1
 ENV PORT=8000
 # Add /app to PYTHONPATH so imports work correctly
 ENV PYTHONPATH=/app
+# Mark as Docker environment
+ENV IS_DOCKER=true
 
-# Expose port
-EXPOSE 8000
+# Expose ports for all agent servers
+EXPOSE 8000 3002 3003 3004 3005
+
+# Make script executable
+RUN chmod +x agents/start-docker.sh
 
 # Start command
-CMD ["python", "agents/orchestrator.py"]
+CMD ["./agents/start-docker.sh"]

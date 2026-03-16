@@ -95,6 +95,8 @@ export function processSequence(
             ctx.currentY = currentY;
 
             currentElementId = uuidv4();
+            if (!firstElementId) firstElementId = currentElementId;
+
             ctx.elements.push({
                 id: currentElementId,
                 type: 'transition',
@@ -135,6 +137,10 @@ export function processSequence(
 
         } else if (element.type === 'divergence') {
             const result = handleDivergence(ctx, element, x, currentY, lastElementId, processSequence);
+
+            if (!firstElementId && result.firstElementId) {
+                firstElementId = result.firstElementId;
+            }
 
             lastElementId = result.lastElementId;
             currentY = result.nextY;

@@ -1,7 +1,7 @@
 // API service for communicating with the backend
 import { GrafcetProject, GsrsmProject } from '../models/types';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+import { API_BASE_URL } from '../config';
 
 // Types for API requests and responses
 export interface CreateProjectRequest {
@@ -795,6 +795,8 @@ export class ApiService {
     success: boolean;
     status: string;
     videoPath?: string;
+    imageBase64?: string;
+    videoBase64?: string;
     error?: string;
   }> {
     try {
@@ -820,6 +822,7 @@ export class ApiService {
     success: boolean;
     status: string;
     videoPath?: string;
+    videoBase64?: string;
     error?: string;
   }> {
     try {

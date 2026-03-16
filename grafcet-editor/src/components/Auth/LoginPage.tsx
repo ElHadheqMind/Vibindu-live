@@ -2,15 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled, { keyframes } from 'styled-components';
 import {
-  FiUser, FiLock, FiAlertCircle, FiCpu,
-  FiLayers, FiZap, FiShield, FiMail, FiMapPin, FiPhone, FiGlobe,
-  FiArrowRight, FiActivity, FiSearch, FiMonitor, FiX, FiCode, FiServer
+  FiCpu, FiLayers, FiZap, FiShield, FiMapPin, FiPhone, FiGlobe,
+  FiArrowRight, FiActivity, FiSearch, FiMonitor, FiCode, FiServer,
+  FiMousePointer, FiFilm, FiExternalLink
 } from 'react-icons/fi';
 import { SiGooglecloud } from 'react-icons/si';
 import GrafcetAnimation from './GrafcetAnimation';
-import { GoogleLogin } from '@react-oauth/google';
+import LoginModal from './LoginModal';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useTheme } from '../../context/ThemeContext';
+import { API_BASE_URL } from '../../config';
 
 // --- Animations ---
 const slideInLeft = keyframes`
@@ -211,6 +212,100 @@ const SectionSubtitle = styled.p`
   margin: 0 auto 60px;
 `;
 
+const AgentGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  margin-bottom: 60px;
+
+  @media (max-width: 968px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const AgentCard = styled.div<{ color: string }>`
+  background: white;
+  padding: 40px;
+  border-radius: 24px;
+  border: 1px solid ${props => props.theme.border}40;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+  text-align: center;
+  transition: all 0.3s;
+  position: relative;
+  overflow: hidden;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: ${props => props.color};
+  }
+
+  &:hover {
+    transform: translateY(-10px);
+    box-shadow: 0 20px 40px ${props => props.color}25;
+    border-color: ${props => props.color}50;
+  }
+
+  h3 {
+    font-size: 22px;
+    margin-bottom: 12px;
+    color: #1a1a2e;
+  }
+
+  p {
+    color: #666;
+    line-height: 1.6;
+    font-size: 15px;
+  }
+`;
+
+const AgentIcon = styled.div<{ bg: string; color: string }>`
+  width: 70px;
+  height: 70px;
+  background: ${props => props.bg};
+  color: ${props => props.color};
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  margin: 0 auto 24px;
+`;
+
+const DevpostBanner = styled.div`
+  background: linear-gradient(90deg, #003d73 0%, #0078d4 100%);
+  color: white;
+  padding: 12px 5%;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  position: absolute;
+  top: 80px;
+  left: 0;
+  right: 0;
+  z-index: 900;
+
+  a {
+    color: white;
+    text-decoration: underline;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    
+    &:hover {
+      opacity: 0.9;
+    }
+  }
+`;
+
 const AIHighlight = styled.div`
   display: flex;
   background: linear-gradient(135deg, ${props => props.theme.primary}08, ${props => props.theme.accent}08);
@@ -315,98 +410,8 @@ const DSLCodeBlock = styled.div`
   .function { color: #dcdcaa; }
 `;
 
-const ModalOverlay = styled.div`
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(8px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2000;
-  padding: 20px;
-`;
-
-const ModalContent = styled.div`
-  width: 100%;
-  max-width: 480px;
-  background-color: ${props => props.theme.surface};
-  border-radius: 28px;
-  position: relative;
-  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.5);
-  border: 1px solid ${props => props.theme.border}40;
-  animation: ${slideInRight} 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-  overflow: hidden;
-`;
-
-const ModalCloseButton = styled.button`
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: ${props => props.theme.background};
-  border: 1px solid ${props => props.theme.border}40;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  z-index: 10;
-  color: ${props => props.theme.text};
-  transition: all 0.2s;
-
-  &:hover {
-    background: ${props => props.theme.primary}10;
-    color: ${props => props.theme.primary};
-    transform: rotate(90deg);
-  }
-`;
-
-const LoginForm = styled.form`
-  width: 100%;
-  padding: 40px;
-`;
-
-const FormTitle = styled.h3`
-  font-size: 28px;
-  font-weight: 800;
-  margin-bottom: 12px;
-  text-align: center;
-`;
-
-const FormSubtitle = styled.p`
-  color: ${props => props.theme.textSecondary};
-  text-align: center;
-  margin-bottom: 32px;
-`;
-
 const InputGroup = styled.div`
   margin-bottom: 20px;
-`;
-
-const Label = styled.label`
-  display: block;
-  margin-bottom: 8px;
-  font-size: 14px;
-  font-weight: 600;
-`;
-
-const InputWrapper = styled.div`
-  position: relative;
-`;
-
-const InputIcon = styled.div`
-  position: absolute;
-  left: 16px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: ${props => props.theme.primary};
-  font-size: 18px;
-  opacity: 0.7;
 `;
 
 const Input = styled.input`
@@ -452,29 +457,6 @@ const PrimaryButton = styled.button`
   &:disabled {
     opacity: 0.7;
     cursor: not-allowed;
-  }
-`;
-
-const GoogleButtonWrapper = styled.div`
-  justify-content: center;
-`;
-
-const Divider = styled.div`
-  display: flex;
-  align-items: center;
-  margin: 24px 0;
-  color: ${props => props.theme.textTertiary};
-  font-size: 14px;
-
-  &::before, &::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: ${props => props.theme.border};
-  }
-
-  span {
-    padding: 0 16px;
   }
 `;
 
@@ -596,32 +578,16 @@ const Copyright = styled.div`
   }
 `;
 
-const ErrorMessage = styled.div`
-  padding: 12px;
-  background: ${props => props.theme.error}10;
-  color: ${props => props.theme.error};
-  border-radius: 8px;
-  font-size: 14px;
-  margin-bottom: 20px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-`;
 
 // --- Component ---
 const LoginPage: React.FC = () => {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [email, setEmail] = useState('');
-  const [name, setName] = useState('');
-  const [isRegistering, setIsRegistering] = useState(false);
   const [contactName, setContactName] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [contactMsg, setContactMsg] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [sendSuccess, setSendSuccess] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const { login, register, googleLogin, isAuthenticated, isLoading, error, clearError } = useAuthStore();
+  const { isAuthenticated } = useAuthStore();
   const { theme } = useTheme();
   const navigate = useNavigate();
 
@@ -631,26 +597,8 @@ const LoginPage: React.FC = () => {
     }
   }, [isAuthenticated, navigate]);
 
-  useEffect(() => {
-    if (error) {
-      clearError();
-    }
-  }, [username, password, email, name, error, clearError]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isRegistering) {
-      await register(email, password, name, username);
-    } else {
-      await login(username, password);
-    }
-  };
-
   const openLoginModal = () => setShowLoginModal(true);
-  const closeLoginModal = () => {
-    setShowLoginModal(false);
-    if (error) clearError();
-  };
+  const closeLoginModal = () => setShowLoginModal(false);
 
 
   const handleContactSubmit = async (e: React.FormEvent) => {
@@ -659,7 +607,7 @@ const LoginPage: React.FC = () => {
 
     setIsSending(true);
     try {
-      const response = await fetch('http://localhost:3001/api/contact', {
+      const response = await fetch(`${API_BASE_URL}/contact`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -692,28 +640,35 @@ const LoginPage: React.FC = () => {
           <img src="/logo.png" alt="VibIndu Logo" />
         </NavLogo>
         <NavLinks>
-          <NavLink onClick={() => openLoginModal()} style={{ cursor: 'pointer' }}>Login</NavLink>
+          <NavLink onClick={openLoginModal} style={{ cursor: 'pointer' }}>Login</NavLink>
           <NavLink href="#features">Features</NavLink>
           <NavLink href="#gemini">Gemini 3</NavLink>
           <NavLink href="#contact">Contact</NavLink>
         </NavLinks>
-        <LoginNavButton onClick={openLoginModal}>Get Started</LoginNavButton>
+        <LoginNavButton onClick={openLoginModal}>Login</LoginNavButton>
       </Navbar>
+
+      <DevpostBanner>
+        <span>Developed & Enhanced for the Gemini Live Agent Challenge</span>
+        <a href="https://geminiliveagentchallenge.devpost.com/" target="_blank" rel="noopener noreferrer">
+          View on Devpost <FiExternalLink size={14} />
+        </a>
+      </DevpostBanner>
 
       <HeroSection>
         <HeroContent>
-          <Badge>Vibe Coding Revolution</Badge>
-          <HeroTitle>Industrial Automation Meets Vibe Coding</HeroTitle>
+          <Badge>Agentic Industrial Intelligence</Badge>
+          <HeroTitle>The Industrial OS for the Agentic Era</HeroTitle>
           <HeroSubtitle>
-            The world's first platform dedicated to industrial automation that lets you
-            <strong> draw, generate, and orchestrate SFC & GSRSM </strong> using only your intent.
-            Experience the future of engineering.
+            VibIndu is a state-of-the-art platform that leverages <strong>Gemini 3 Multimodal Agents</strong> to 
+            automate industrial logic. From drawing SFCs to autonomous computer-use orchestration, 
+            we're redefining industrial engineering.
           </HeroSubtitle>
           <PoweredBy>
-            <SiGooglecloud /> Powered by Gemini 3
+            <SiGooglecloud /> Powered by Gemini 3 Live Agent API
           </PoweredBy>
           <PrimaryButton style={{ width: 'auto', padding: '18px 36px', fontSize: '18px' }} onClick={openLoginModal}>
-            Start Building Now <FiArrowRight />
+            Start Vibe Coding <FiArrowRight />
           </PrimaryButton>
         </HeroContent>
         <HeroVisual>
@@ -722,6 +677,47 @@ const LoginPage: React.FC = () => {
           </AnimationWrapper>
         </HeroVisual>
       </HeroSection>
+
+      <TechSection style={{ background: 'white' }}>
+        <SectionTitle>Meet Your Agentic Workforce</SectionTitle>
+        <SectionSubtitle>
+          We've built a specialized team of AI agents to handle every stage of your industrial project.
+        </SectionSubtitle>
+
+        <AgentGrid style={{ maxWidth: '1400px', margin: '0 auto' }}>
+          <AgentCard color="#00c853">
+            <AgentIcon bg="#00c85315" color="#00c853"><FiCpu /></AgentIcon>
+            <h3>Industrial Automation</h3>
+            <p>
+              The brain of the system. Orchestrates multi-agent workflows to design, verify, and compile standards-compliant SFC & GSRSM logic.
+            </p>
+          </AgentCard>
+
+          <AgentCard color="#1976d2">
+            <AgentIcon bg="#1976d215" color="#1976d2"><FiZap /></AgentIcon>
+            <h3>Live Agent</h3>
+            <p>
+              Voice-activated synchronization. Listens and acts on your diagrams in real-time using Gemini 3's live multimodal capabilities.
+            </p>
+          </AgentCard>
+
+          <AgentCard color="#764ba2">
+            <AgentIcon bg="#764ba215" color="#764ba2"><FiMousePointer /></AgentIcon>
+            <h3>Computer Use</h3>
+            <p>
+              Autonomous CAD control. Navigates engineering interfaces to execute low-level design tasks previously restricted to humans.
+            </p>
+          </AgentCard>
+
+          <AgentCard color="#f57c00">
+            <AgentIcon bg="#f57c0015" color="#f57c00"><FiFilm /></AgentIcon>
+            <h3>Storyteller</h3>
+            <p>
+              Narrative transformation. Generates cinematic visual walkthroughs that explain complex technical logic as compelling stories.
+            </p>
+          </AgentCard>
+        </AgentGrid>
+      </TechSection>
 
       <TechSection id="gemini">
         <SectionTitle>Next-Gen Multimodal Intelligence</SectionTitle>
@@ -971,125 +967,7 @@ const LoginPage: React.FC = () => {
         </Copyright>
       </Footer>
 
-      {/* Login Modal */}
-      {showLoginModal && (
-        <ModalOverlay onClick={(e) => e.target === e.currentTarget && closeLoginModal()}>
-          <ModalContent>
-            <ModalCloseButton onClick={closeLoginModal}>
-              <FiX size={20} />
-            </ModalCloseButton>
-
-            <LoginForm onSubmit={handleSubmit}>
-              <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-                <img src="/logo.png" alt="Logo" style={{ height: '60px', mixBlendMode: 'multiply' }} />
-              </div>
-              <FormTitle>{isRegistering ? 'Create Account' : 'Welcome to the Future'}</FormTitle>
-              <FormSubtitle>
-                {isRegistering ? 'Start your vibe coding journey today.' : 'Sign in to access your dashboard.'}
-              </FormSubtitle>
-
-              {error && (
-                <ErrorMessage>
-                  <FiAlertCircle /> {error}
-                </ErrorMessage>
-              )}
-
-              {isRegistering && (
-                <InputGroup>
-                  <Label>Full Name</Label>
-                  <InputWrapper>
-                    <InputIcon><FiUser /></InputIcon>
-                    <Input
-                      type="text"
-                      placeholder="John Doe"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      required
-                    />
-                  </InputWrapper>
-                </InputGroup>
-              )}
-
-              <InputGroup>
-                <Label>{isRegistering ? 'Username' : 'Email or Username'}</Label>
-                <InputWrapper>
-                  <InputIcon><FiUser /></InputIcon>
-                  <Input
-                    type="text"
-                    placeholder={isRegistering ? "choose_username" : "your@email.com"}
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    required
-                  />
-                </InputWrapper>
-              </InputGroup>
-
-              {isRegistering && (
-                <InputGroup>
-                  <Label>Email</Label>
-                  <InputWrapper>
-                    <InputIcon><FiMail /></InputIcon>
-                    <Input
-                      type="email"
-                      placeholder="john@company.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                    />
-                  </InputWrapper>
-                </InputGroup>
-              )}
-
-              <InputGroup>
-                <Label>Password</Label>
-                <InputWrapper>
-                  <InputIcon><FiLock /></InputIcon>
-                  <Input
-                    type="password"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                </InputWrapper>
-              </InputGroup>
-
-              <PrimaryButton type="submit" disabled={isLoading}>
-                {isLoading ? 'Processing...' : (isRegistering ? 'Register' : 'Sign In')}
-              </PrimaryButton>
-
-              <div style={{ marginTop: '20px', textAlign: 'center', fontSize: '14px' }}>
-                {isRegistering ? 'Already have an account?' : "Don't have an account?"} {' '}
-                <a
-                  href="#"
-                  onClick={(e) => { e.preventDefault(); setIsRegistering(!isRegistering); }}
-                  style={{ color: '#1976d2', fontWeight: 700, textDecoration: 'none' }}
-                >
-                  {isRegistering ? 'Sign In' : 'Create Account'}
-                </a>
-              </div>
-
-              {!isRegistering && (
-                <>
-                  <Divider><span>OR</span></Divider>
-                  <GoogleButtonWrapper>
-                    <GoogleLogin
-                      onSuccess={credentialResponse => {
-                        if (credentialResponse.credential) {
-                          googleLogin(credentialResponse.credential);
-                        }
-                      }}
-                      onError={() => console.log('Login Failed')}
-                      useOneTap
-                    />
-                  </GoogleButtonWrapper>
-                </>
-              )}
-
-            </LoginForm>
-          </ModalContent>
-        </ModalOverlay>
-      )}
+      <LoginModal isOpen={showLoginModal} onClose={closeLoginModal} />
     </PageContainer>
   );
 };

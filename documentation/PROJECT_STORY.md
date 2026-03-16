@@ -1,15 +1,15 @@
 # The Story of VibIndu
 ## The World's First "Physics-Grounded" Agentic IDE for Industrial Automation with Gemini 3
 
-> **High Concept**: *Cursor for Factories*. An agentic swarm powered by **Gemini 3**, **Nano**, and **Veo** that turns natural language into IEC-compliant industrial code—simulated in real-time with physics-accurate video digital twins.
+> **High Concept**: *The "Antigravity" of Industrial Automation*. An agentic swarm powered by **Gemini 3**, **Nano**, and **Veo** that turns natural language into IEC-compliant industrial code—simulated in real-time with physics-accurate video digital twins.
 
 ## Inspiration: "Vibe Coding" for the Real World
 The world of Industrial Automation is stuck in the 90s. While web developers enjoy AI-accelerated workflows, industrial engineers are battling archaic, rigid PLCs. We asked: **Why can't building a factory be as fluid as building a website?**
 
-We built **VibIndu** to bridge the gap between "Vibe Coding" (high-speed, creative iteration) and "Industrial Safety" (zero-tolerance for error). It’s not just a copilot; it’s a **Co-Engineer** that reasons, simulates, and guarantees safety before a single motor turns.
+We built **VibIndu** to be the **Antigravity for the Industrial World**—bringing the same advanced agentic capabilities to the factory floor that Antigravity brings to software engineering. We bridge the gap between "Vibe Coding" (high-speed, creative iteration) and "Industrial Safety" (zero-tolerance for error). It’s not just a copilot; it’s a **Co-Engineer** that reasons, simulates, and guarantees safety before a single motor turns.
 
 ## The Breakthrough
-We didn't just wrap an LLM. We built a **Self-Correcting Orchestrator** where **Gemini 3** acts as the Architect, **Nano** ensures zero-latency edge inference, and **Veo** generates the reality.
+We didn't just wrap an LLM. We built a **Self-Correcting Orchestrator** where **Gemini 3** acts as the Architect, **Nano** visualizes the system architecture, and **Veo** generates the reality.
 
 ## What We Learned
 Building **VibIndu** taught us that **orchestration is everything**. An industrial specification is too complex for a single prompt. We learned to think in terms of **Swarm Intelligence**:
@@ -44,12 +44,12 @@ The heart of our backend is `ThinkingForge`, a sophisticated orchestrator built 
 
 ## 🚀 From Code to Reality: The "Vibe" Evolution
 
-We didn't just want to generate text; we wanted to generate **reality**. We pushed the boundaries of what an IDE can do by integrating "Nano-fast" edge intelligence with "Veo-real" simulation.
+We didn't just want to generate text; we wanted to generate **reality**. We pushed the boundaries of what an IDE can do by combining instant system visualization with "Veo-real" simulation.
 
-### 🍌 Nano Banana: The "Mind-Reading" Edge
-We introduced **Nano Banana**, a hyper-optimized reasoning engine powered by **Gemini Nano**.
--   **Zero-Latency "Vibe"**: It runs locally, predicting your next move before you even type it. It bridges the gap between thought and syntax, offering instant safety checks and logic completions.
--   **No Lag, Just Flow**: By handling the "fast" logic on the edge, we ensure the "vibe" is never broken. It feels less like coding and more like direct telepathy with the machine.
+### 🍌 Nano Banana: Instant System Visualization
+We integrated **Nano Banana**, a specialized visualization module.
+-   **From Code to Blueprint**: It instantly translates your abstract Grafcet logic into a realistic visual representation of the industrial system.
+-   **Visual Grounding**: It provides immediate visual context, generating an image of the "Plant" (conveyors, arms, tanks) that matches your code, ensuring you and the AI are building for the same physical reality before you even hit simulate.
 
 ### 🎥 Veo 3: Code-to-Reality™
 This is our "one more thing." We integrated **Veo 3** (Google's generative video model) to create the world's first **Generative Digital Twin**.

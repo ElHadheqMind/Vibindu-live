@@ -18,8 +18,16 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+# Backend URL - uses Docker service name in Docker, localhost for local dev
+BACKEND_URL = os.getenv("BACKEND_URL", "http://backend:3001" if os.getenv("IS_DOCKER", "false").lower() == "true" else "http://localhost:3001")
+# Storage path - shared volume in Docker, empty for local dev
+STORAGE_PATH = os.getenv("STORAGE_PATH", "")
+
+# Orchestrator URL for broadcasting results back to the UI
+ORCHESTRATOR_BROADCAST_URL = os.getenv("ORCHESTRATOR_BROADCAST_URL", "http://127.0.0.1:8000/api/broadcast")
+
 class NavigateTool(BaseTool):
-    def __init__(self, api_url: str = "http://localhost:3001/api/simulation/navigate"):
+    def __init__(self, api_url: str = f"{BACKEND_URL}/api/simulation/navigate"):
         super().__init__(
             name="Navigate",
             description="Navigates to a specific file in the project (e.g. 'check default sfc in A1'). Returns the URL.",
@@ -59,7 +67,7 @@ class NavigateTool(BaseTool):
                 return {"success": False, "error": str(e)}
 
 class SfcCompilerTool(BaseTool):
-    def __init__(self, api_url: str = "http://localhost:3001/api/sfc/compile"):
+    def __init__(self, api_url: str = f"{BACKEND_URL}/api/sfc/compile"):
         super().__init__(
             name="SfcCompiler",
             description="Compiles SFC DSL code into a GRAFCET diagram and returns errors if any.",
@@ -97,7 +105,7 @@ class SfcCompilerTool(BaseTool):
                 return {"success": False, "error": str(e)}
 
 class SimulationConfigTool(BaseTool):
-    def __init__(self, api_url: str = "http://localhost:3001/api/simulation/save"):
+    def __init__(self, api_url: str = f"{BACKEND_URL}/api/simulation/save"):
         super().__init__(
             name="SimulationConfig",
             description="Saves the simulation configuration (variables, actions) to index.sim.",
@@ -139,7 +147,7 @@ class SimulationConfigTool(BaseTool):
                 return {"success": False, "error": str(e)}
 
 class SaveDiagramTool(BaseTool):
-    def __init__(self, api_url: str = "http://localhost:3001/api/files/save-diagram"):
+    def __init__(self, api_url: str = f"{BACKEND_URL}/api/files/save-diagram"):
         super().__init__(
             name="SaveDiagram",
             description="Saves a diagram (SFC/GSRSM) to the project.",
@@ -182,7 +190,7 @@ class SaveDiagramTool(BaseTool):
                 return {"success": False, "error": str(e)}
 
 class CreateProjectTool(BaseTool):
-    def __init__(self, api_url: str = "http://localhost:3001/api/projects/create"):
+    def __init__(self, api_url: str = f"{BACKEND_URL}/api/projects/create"):
         super().__init__(
             name="CreateProject",
             description="Creates a new project (Grafcet or Gsrsm).",
@@ -217,7 +225,7 @@ class CreateProjectTool(BaseTool):
                 return {"success": False, "error": str(e)}
 
 class CreateFileTool(BaseTool):
-    def __init__(self, api_url: str = "http://localhost:3001/api/files/create-file"):
+    def __init__(self, api_url: str = f"{BACKEND_URL}/api/files/create-file"):
         super().__init__(
             name="CreateFile",
             description="Creates a new file or folder.",
@@ -252,7 +260,7 @@ class CreateFileTool(BaseTool):
                 return {"success": False, "error": str(e)}
 
 class ListFilesTool(BaseTool):
-    def __init__(self, api_url: str = "http://localhost:3001/api/files/browse/"):
+    def __init__(self, api_url: str = f"{BACKEND_URL}/api/files/browse/"):
         super().__init__(
             name="ListFiles",
             description="Browse files in a directory.",
@@ -290,7 +298,7 @@ class ListFilesTool(BaseTool):
                 return {"success": False, "error": str(e)}
 
 class ActivateModeTool(BaseTool):
-    def __init__(self, api_url: str = "http://localhost:3001/api/files/create-folder"):
+    def __init__(self, api_url: str = f"{BACKEND_URL}/api/files/create-folder"):
         super().__init__(
             name="ActivateMode",
             description="Creates the folder structure for a specific GSRSM mode.",
@@ -343,7 +351,7 @@ class ActivateModeTool(BaseTool):
                 return {"success": False, "error": str(e)}
 
 class CreateVariablesListTool(BaseTool):
-    def __init__(self, load_url: str = "http://localhost:3001/api/simulation/load", save_url: str = "http://localhost:3001/api/simulation/save"):
+    def __init__(self, load_url: str = f"{BACKEND_URL}/api/simulation/load", save_url: str = f"{BACKEND_URL}/api/simulation/save"):
         super().__init__(
             name="CreateVariablesList",
             description="Saves or updates the variables list in index.sim.",
@@ -387,7 +395,7 @@ class CreateVariablesListTool(BaseTool):
                 return {"success": False, "error": str(e)}
 
 class CreateActionsListTool(BaseTool):
-    def __init__(self, load_url: str = "http://localhost:3001/api/simulation/load", save_url: str = "http://localhost:3001/api/simulation/save"):
+    def __init__(self, load_url: str = f"{BACKEND_URL}/api/simulation/load", save_url: str = f"{BACKEND_URL}/api/simulation/save"):
         super().__init__(
             name="CreateActionsList",
             description="Saves or updates the actions list in index.sim.",
@@ -431,7 +439,7 @@ class CreateActionsListTool(BaseTool):
                 return {"success": False, "error": str(e)}
 
 class CreateSfcTool(BaseTool):
-    def __init__(self, compile_url: str = "http://localhost:3001/api/sfc/compile", save_url: str = "http://localhost:3001/api/files/save-diagram"):
+    def __init__(self, compile_url: str = f"{BACKEND_URL}/api/sfc/compile", save_url: str = f"{BACKEND_URL}/api/files/save-diagram"):
         super().__init__(
             name="CreateSfc",
             description="Generates, compiles, and saves an SFC diagram.",
@@ -475,7 +483,7 @@ class CreateSfcTool(BaseTool):
                          # Broadcast project_reload to trigger frontend auto-refresh
                          try:
                              async with session.post(
-                                 "http://127.0.0.1:8000/api/broadcast",
+                                 ORCHESTRATOR_BROADCAST_URL,
                                  json={"payload": {"type": "project_reload"}}
                              ) as broadcast_resp:
                                  if broadcast_resp.status == 200:
@@ -493,7 +501,7 @@ class CreateSfcTool(BaseTool):
 
 
 class ConfigureIOTool(BaseTool):
-    def __init__(self, api_url: str = "http://localhost:3001/api/simulation/save"):
+    def __init__(self, api_url: str = f"{BACKEND_URL}/api/simulation/save"):
         super().__init__(
             name="ConfigureIO",
             description="Configures both Variables and Actions for the simulation in one go.",
@@ -566,7 +574,7 @@ class UpdateGsrsmModesTool(BaseTool):
     Writes to: tool_context.state['gsrsm_data']
     """
 
-    def __init__(self, api_url: str = "http://localhost:3001/api/files/save-diagram"):
+    def __init__(self, api_url: str = f"{BACKEND_URL}/api/files/save-diagram"):
         super().__init__(
             name="UpdateGsrsmModes",
             description="Updates the GSRSM modes and transitions in the .gsrsm file.",
@@ -608,6 +616,10 @@ class UpdateGsrsmModesTool(BaseTool):
                 - transitionsUpdated (int): Number of transitions processed
                 - error (str): Error message if failed
         """
+        # Fallback to context state if LLM forgets project_path
+        if not project_path and tool_context is not None:
+            project_path = tool_context.state.get("project_path", "")
+
         logger.info(f"[{self.name}] Updating GSRSM modes for project: {project_path}")
 
         # Validate project_path
@@ -646,7 +658,7 @@ class UpdateGsrsmModesTool(BaseTool):
                 # 1. LOAD EXISTING or CREATE BASE from STANDARD
                 
                 # Fetch file list to find the .gsrsm file
-                browse_url = f"http://localhost:3001/api/files/browse/{project_path}"
+                browse_url = f"{BACKEND_URL}/api/files/browse/{project_path}"
                 target_file_path = None
                 
                 async with session.get(browse_url) as resp:
@@ -660,7 +672,7 @@ class UpdateGsrsmModesTool(BaseTool):
                 
                 if not target_file_path:
                     # Create one if missing
-                    create_url = "http://localhost:3001/api/files/create-file"
+                    create_url = f"{BACKEND_URL}/api/files/create-file"
                     payload = {
                         "parentPath": project_path,
                         "fileName": "project.gsrsm",
@@ -677,9 +689,10 @@ class UpdateGsrsmModesTool(BaseTool):
 
                 # READ EXISTING CONTENT
                 existing_project = None
-                if target_file_path and os.path.exists(target_file_path):
+                resolved_file_path = os.path.join(STORAGE_PATH, target_file_path) if STORAGE_PATH and target_file_path else target_file_path
+                if resolved_file_path and os.path.exists(resolved_file_path):
                     try:
-                        async with aiofiles.open(target_file_path, mode='r') as f:
+                        async with aiofiles.open(resolved_file_path, mode='r') as f:
                             content = await f.read()
                             existing_project = json.loads(content)
                     except Exception as e:
@@ -758,13 +771,14 @@ class UpdateGsrsmModesTool(BaseTool):
                         if is_active:
                             updated_modes_count += 1
                             # FOLDER CREATION LOGIC ONLY IF ACTIVE
-                            mode_folder = f"{project_path}/modes/{current_modes[idx]['code']}"
+                            mode_code = current_modes[idx]['code']
+                            mode_folder = os.path.join(STORAGE_PATH, project_path, "modes", mode_code) if STORAGE_PATH else f"{project_path}/modes/{mode_code}"
                             if not os.path.exists(mode_folder):
                                 try:
                                     os.makedirs(mode_folder, exist_ok=True)
                                     # Start file - use default.sfc to match backend convention
-                                    with open(f"{mode_folder}/default.sfc", 'w') as f:
-                                        f.write(json.dumps({"id": str(__import__('uuid').uuid4()), "name": f"{current_modes[idx]['code']} Default Grafcet", "elements": [], "version": "1.0"}, indent=2))
+                                    with open(os.path.join(mode_folder, "default.sfc"), 'w') as f:
+                                        f.write(json.dumps({"id": str(__import__('uuid').uuid4()), "name": f"{mode_code} Default Grafcet", "elements": [], "version": "1.0"}, indent=2))
                                 except Exception as e:
                                     logger.error(f"Failed to create mode folder: {e}")
                     else:
@@ -789,11 +803,11 @@ class UpdateGsrsmModesTool(BaseTool):
                         updated_modes_count += 1
                         
                         if new_mode["activated"]:
-                            mode_folder = f"{project_path}/modes/{new_mode['code']}"
+                            mode_folder = os.path.join(STORAGE_PATH, project_path, "modes", new_mode['code']) if STORAGE_PATH else f"{project_path}/modes/{new_mode['code']}"
                             if not os.path.exists(mode_folder):
                                 try:
                                     os.makedirs(mode_folder, exist_ok=True)
-                                    with open(f"{mode_folder}/default.sfc", 'w') as f:
+                                    with open(os.path.join(mode_folder, "default.sfc"), 'w') as f:
                                         f.write(json.dumps({"id": str(__import__('uuid').uuid4()), "name": f"{new_mode['code']} Default Grafcet", "elements": [], "version": "1.0"}, indent=2))
                                 except Exception as e:
                                     logger.error(f"Failed to create mode folder: {e}")

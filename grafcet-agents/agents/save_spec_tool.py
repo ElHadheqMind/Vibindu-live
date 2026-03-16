@@ -10,12 +10,14 @@ The spec.md serves as the project's context document containing:
 """
 
 import logging
+import os
 import aiohttp
 from typing import List, Optional
 from base_tool import BaseTool
 
 logger = logging.getLogger(__name__)
 
+BACKEND_URL = os.getenv("BACKEND_URL", "http://backend:3001" if os.getenv("IS_DOCKER", "false").lower() == "true" else "http://localhost:3001") # Defined BACKEND_URL using os.getenv
 
 class SaveSpecTool(BaseTool):
     """
@@ -25,7 +27,7 @@ class SaveSpecTool(BaseTool):
     Images are described in text format (not saved as files).
     """
 
-    def __init__(self, api_url: str = "http://localhost:3001/api/simulation/save-spec"):
+    def __init__(self, api_url: str = f"{BACKEND_URL}/api/simulation/save-spec"): # Modified api_url to use BACKEND_URL
         super().__init__(
             name="SaveSpecTool",
             description="Saves the analyzed specification as a Markdown file (spec.md) in the project.",

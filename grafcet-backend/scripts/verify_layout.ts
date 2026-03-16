@@ -12,11 +12,9 @@ Transition T0
 Divergence AND
     Branch
         Step 1
-        Transition T2
     EndBranch
     Branch
         Step 2
-        Transition T3
     EndBranch
 EndDivergence
 Step 3
@@ -41,19 +39,29 @@ Step 3
     };
 
     const s0_y = getY('step', 0);
+    const s0_x = elsAND.find((e: any) => e.type === 'step' && e.number === 0)?.position.x;
     const t0_y = getY('transition', 'T0');
     const gate_y = elsAND.find((e: any) => e.type === 'and-gate' && e.gateMode === 'divergence')?.position.y;
     const s1_y = getY('step', 1);
+    const s1_x = elsAND.find((e: any) => e.type === 'step' && e.number === 1)?.position.x;
+    const s2_x = elsAND.find((e: any) => e.type === 'step' && e.number === 2)?.position.x;
 
     console.log(`Step 0 Y: ${s0_y} (Expected: 0)`);
+    console.log(`Step 0 X: ${s0_x} (Expected: 114)`);
     console.log(`Trans T0 Y: ${t0_y} (Expected: 65) [0+40+25]`);
     console.log(`Gate Y: ${Math.round(gate_y)} (Expected: 86) [65+6+15]`);
     console.log(`Step 1 Y: ${s1_y} (Expected: 140) [86+8+46]`);
+    console.log(`Step 1 X: ${s1_x} (Expected: -86) [114 - (400/2)]`);
+    console.log(`Step 2 X: ${s2_x} (Expected: 314) [-86 + 400]`);
 
-    if (s0_y === 0 && t0_y === 65 && Math.round(gate_y) === 86 && s1_y === 140) {
-        console.log("✅ AND Divergence Layout Verified!");
+    const horizontalCorrect = s1_x === -86 && s2_x === 314;
+    const verticalCorrect = s0_y === 0 && t0_y === 65 && Math.round(gate_y) === 86 && s1_y === 140;
+
+    if (verticalCorrect && horizontalCorrect) {
+        console.log("✅ AND Divergence Layout Verified (Vertical & Horizontal)!");
     } else {
-        console.error("❌ AND Divergence Layout Mismatch!");
+        if (!verticalCorrect) console.error("❌ AND Divergence Vertical Layout Mismatch!");
+        if (!horizontalCorrect) console.error("❌ AND Divergence Horizontal Layout Mismatch!");
     }
 
     // 2. Test OR Divergence (Compact Spacing)

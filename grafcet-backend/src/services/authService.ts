@@ -42,25 +42,35 @@ export class AuthService {
 
     static async login(identifier: string, password: string) {
         const prisma = getPrisma();
+        const trimmedIdentifier = identifier.trim();
+        const trimmedPassword = password.trim();
+
+        console.log(`[AuthService] Attempting login for: ${trimmedIdentifier}`);
+        
         const user = await prisma.user.findFirst({
             where: {
                 OR: [
-                    { email: identifier },
-                    { username: identifier }
+                    { email: trimmedIdentifier },
+                    { username: trimmedIdentifier }
                 ]
             }
         });
 
         if (!user) {
+            console.warn(`[AuthService] User not found: ${trimmedIdentifier}`);
             throw new Error('Invalid credentials');
         }
 
         if (!user.password) {
+            console.warn(`[AuthService] User has no password (Google login required): ${trimmedIdentifier}`);
             throw new Error('Please login with Google');
         }
 
-        const valid = await bcrypt.compare(password, user.password);
+        const valid = await bcrypt.compare(trimmedPassword, user.password);
         if (!valid) {
+            console.warn(`[AuthService] Password mismatch for: ${trimmedIdentifier}`);
+            // Log masked lengths for debugging hidden characters
+            console.debug(`[AuthService] Debug: inputLen=${trimmedPassword.length}, storedHashLen=${user.password.length}`);
             throw new Error('Invalid credentials');
         }
 
@@ -75,24 +85,52 @@ export class AuthService {
         };
     }
 
-    static async seedDemoUser() {
+    static async seedDefaultAccounts() {
         try {
             const prisma = getPrisma();
-            const demoUser = await prisma.user.findUnique({ where: { username: 'demo' } });
-            if (!demoUser) {
-                const hashedPassword = await bcrypt.hash('demo123', 10);
-                await prisma.user.create({
-                    data: {
-                        username: 'demo',
-                        email: 'demo@grafcet-editor.com',
-                        password: hashedPassword,
-                        name: 'Demo User'
-                    }
-                });
-                console.log('Demo user created');
-            }
+            
+            // 1. Admin Account (User's account)
+            // 1. Admin Account
+            const adminEmail = 'mezzihoussem1@gmail.com';
+            const adminPassword = (process.env.ADMIN_PASSWORD || 'vibindu-admin-2026').trim();
+            const hashedAdminPassword = await bcrypt.hash(adminPassword, 10);
+            
+            await prisma.user.upsert({
+                where: { email: adminEmail },
+                update: { password: hashedAdminPassword },
+                create: {
+                    email: adminEmail,
+                    username: 'admin',
+                    password: hashedAdminPassword,
+                    name: 'Vibindu Admin'
+                }
+            });
+            console.log(`Admin account synced: ${adminEmail}`);
+
+            // 2. Judge Account
+            const judgeEmail = 'gemini.live.judge@gmail.com';
+            const judgePassword = (process.env.JUDGE_PASSWORD || 'gemini-judge-2026').trim();
+            const hashedJudgePassword = await bcrypt.hash(judgePassword, 10);
+            
+            await prisma.user.upsert({
+                where: { email: judgeEmail },
+                update: { password: hashedJudgePassword },
+                create: {
+                    email: judgeEmail,
+                    username: 'judge',
+                    password: hashedJudgePassword,
+                    name: 'Gemini Live Judge'
+                }
+            });
+            console.log(`Judge account synced: ${judgeEmail}`);
+
+            // Optional: Remove old demo user if it exists
+            await prisma.user.deleteMany({
+                where: { username: 'demo' }
+            }).catch(() => {});
+
         } catch (error) {
-            console.error('Error seeding demo user:', error);
+            console.error('Error seeding accounts:', error);
         }
     }
 

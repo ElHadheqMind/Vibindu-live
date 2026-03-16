@@ -4,10 +4,12 @@ import { useSimulationStore } from '../store/useSimulationStore';
 import { useFileExplorerStore } from '../store/useFileExplorerStore';
 import { useElementsStore } from '../store/useElementsStore';
 import { useGsrsmFileStore } from '../store/useGsrsmFileStore';
+import { useGsrsmStore } from '../store/useGsrsmStore';
+import { useSocketStore } from '../store/useSocketStore';
 import { ApiService } from '../services/apiService';
 
-// Default refresh interval: 5 seconds
-const DEFAULT_REFRESH_INTERVAL = 5000;
+// Default refresh interval: 2 seconds for guaranteed updates
+const DEFAULT_REFRESH_INTERVAL = 2000;
 
 interface AutoRefreshOptions {
   interval?: number;
@@ -33,53 +35,56 @@ export function useAutoRefresh(options: AutoRefreshOptions = {}) {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastRefreshRef = useRef<number>(0);
 
-  // Get current project from store
+  // Get current project path from EITHER store (Grafcet or GSRSM)
   const currentProjectId = useProjectStore(state => state.currentProjectId);
   const projects = useProjectStore(state => state.projects);
-  const currentProject = projects.find(p => p.id === currentProjectId);
+  const grafcetProject = projects.find(p => p.id === currentProjectId);
+  const gsrsmProject = useGsrsmStore(state => state.project);
+
+  // Resolve the active project's localPath — check both stores
+  const activeProjectPath = grafcetProject?.localPath || gsrsmProject?.localPath || null;
 
   // Refresh IO/Simulation data
   const refreshIOData = useCallback(async () => {
-    if (!currentProject?.localPath) return;
-    
+    if (!activeProjectPath) return;
+
     try {
-      await useSimulationStore.getState().loadSimulation(currentProject.localPath);
+      await useSimulationStore.getState().loadSimulation(activeProjectPath);
     } catch (error) {
       console.error('[AutoRefresh] Failed to refresh IO data:', error);
     }
-  }, [currentProject?.localPath]);
+  }, [activeProjectPath]);
 
   // Refresh File Explorer
   const refreshFileExplorerData = useCallback(async () => {
-    if (!currentProject?.localPath) return;
-    
+    if (!activeProjectPath) return;
+
     try {
-      await useFileExplorerStore.getState().loadFileTree(currentProject.localPath);
+      await useFileExplorerStore.getState().loadFileTree(activeProjectPath);
     } catch (error) {
       console.error('[AutoRefresh] Failed to refresh file explorer:', error);
     }
-  }, [currentProject?.localPath]);
+  }, [activeProjectPath]);
 
   // Refresh current diagram (SFC/GRAFCET/GRSM)
   const refreshDiagramData = useCallback(async () => {
-    if (!currentProject?.localPath) return;
-    
-    const currentDiagramId = useProjectStore.getState().currentDiagramId;
-    const project = useProjectStore.getState().projects.find(p => p.id === currentProjectId);
-    const currentDiagram = project?.diagrams?.find(d => d.id === currentDiagramId);
-    
-    if (!currentDiagram?.filePath) return;
-    
+    if (!activeProjectPath) return;
+
+    const currentFilePath = useGsrsmFileStore.getState().currentFilePath;
+    if (!currentFilePath) return;
+
     try {
-      const result = await ApiService.loadDiagram({ filePath: currentDiagram.filePath });
+      const result = await ApiService.loadDiagram({ diagramPath: currentFilePath });
       if (result.success && result.diagram) {
         // Update elements store with loaded diagram elements
-        useElementsStore.getState().setElements(result.diagram.elements || []);
+        if ((result.diagram as any).elements) {
+          useElementsStore.getState().loadElements((result.diagram as any).elements);
+        }
       }
     } catch (error) {
       console.error('[AutoRefresh] Failed to refresh diagram:', error);
     }
-  }, [currentProject?.localPath, currentProjectId]);
+  }, [activeProjectPath]);
 
   // Main refresh function
   const refresh = useCallback(async () => {
@@ -115,9 +120,9 @@ export function useAutoRefresh(options: AutoRefreshOptions = {}) {
     await Promise.allSettled(promises);
   }, [refreshIO, refreshFileExplorer, refreshDiagram, refreshIOData, refreshFileExplorerData, refreshDiagramData]);
 
-  // Set up interval
+  // Set up event listeners, polling, and initial refresh
   useEffect(() => {
-    if (!enabled || !currentProject?.localPath) {
+    if (!enabled || !activeProjectPath) {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
@@ -128,16 +133,36 @@ export function useAutoRefresh(options: AutoRefreshOptions = {}) {
     // Initial refresh
     refresh();
 
-    // Set up polling interval
+    // 1. Set up polling interval as a failsafe
     intervalRef.current = setInterval(refresh, interval);
+
+    // 2. Set up Socket.IO for immediate updates if the connection is alive
+    const socketStore = useSocketStore.getState();
+    socketStore.connect();
+
+    const handleFileEvent = (data: any) => {
+      console.log('[AutoRefresh] 🔄 Real-time file event received:', data);
+      
+      // Don't auto-refresh while a diagram is being saved
+      // To prevent it overwriting just-saved work before the UI settles
+      refresh();
+    };
+
+    socketStore.subscribe('file:changed', handleFileEvent);
+    socketStore.subscribe('file:created', handleFileEvent);
+    socketStore.subscribe('file:deleted', handleFileEvent);
 
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
+      
+      socketStore.unsubscribe('file:changed', handleFileEvent);
+      socketStore.unsubscribe('file:created', handleFileEvent);
+      socketStore.unsubscribe('file:deleted', handleFileEvent);
     };
-  }, [enabled, interval, currentProject?.localPath, refresh]);
+  }, [enabled, interval, activeProjectPath, refresh]);
 
   // Return manual refresh function for on-demand refresh
   return { refresh };

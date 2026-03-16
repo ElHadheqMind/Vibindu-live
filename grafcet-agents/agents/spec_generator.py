@@ -47,102 +47,43 @@ class SpecResult:
     images_described: int = 0
 
 
-SPEC_GENERATION_PROMPT = """You are an expert industrial automation specification analyst.
+SPEC_GENERATION_PROMPT = """You are an expert industrial automation control system engineer.
 
-Analyze this PDF document and generate a comprehensive Markdown specification document.
+Analyze this PDF document ("cahier des charges" / specification document) and generate a highly detailed, comprehensive, and well-organized Functional Design Specification (FDS) in Markdown format.
 
 ## YOUR TASK
-1. **Read the entire document** - Extract all text, tables, and structured data
-2. **Describe ALL images/diagrams** - For each visual element:
-   - Identify the type (P&ID, timing diagram, flowchart, wiring diagram, etc.)
-   - Describe ALL visible components, connections, and labels
-   - Extract any values, annotations, or specifications shown
-   - Explain the relationships between elements
-3. **Generate a well-structured Markdown document** with all extracted information
+The generated specification is the foundational document for building the automated control system. It must be extremely comprehensive, adhering to industrial automation best practices (e.g., inspired by ISA-88/IEC-61512 concepts for batch/discrete control). You must extract ALL details without abstracting or summarizing away important information.
 
-## OUTPUT FORMAT
-Generate a Markdown document with this structure. Use emojis for visual appeal:
+1. **Extract All Specifications**: Include every requirement, constraint, and operational detail mentioned in the document. Do not leave any information behind.
+2. **Physical Architecture & Components**: Detail all system components, their quantities, physical characteristics, roles, and how they interact. Provide exhaustive descriptions of the hardware, sensors, actuators, equipment modules, and mechanical parts.
+3. **Procedural Control & Sequences**: Provide complete and step-by-step descriptions of the process flow, operational modes (Auto, Manual, Local), sequences, safety requirements (interlocks, emergency stops), and timing constraints.
+4. **Describe Visuals in Detail**: For all images, P&IDs, timing diagrams, flowcharts, or wiring diagrams:
+   - Identify the type of visual.
+   - Describe ALL visible components, connections, states, and labels.
+   - Explain the relationships and behavior depicted.
 
-```markdown
-# 📋 [Document Title]
+## WHAT NOT TO DO
+- **NO Rigid Templates**: Do not force the output into a specific predefined template if it doesn't fit the source material. Instead, organize the document logically based on the input PDF, using a clear hierarchical Markdown schema.
+- **NO Formatting Constraints**: Do not force data into rigid tables if it doesn't fit naturally. Describe physical components, their signals, and operational conditions naturally but comprehensively within the text.
 
-## 📝 Executive Summary
-[Brief overview of what this specification describes]
+## CONTENT ORGANIZATION GUIDELINES
+Organize your comprehensive text so that an automation engineer can easily extract information for programming. A recommended (but flexible) structure is:
+1. **System Overview & Scope**: Purpose of the automation and boundaries.
+2. **Equipment & Instrumentation Specification**: Detailed breakdown of sensors, actuators, and hardware modules. (Crucial for I/O allocation).
+3. **Modes of Operation & States**: Description of operating modes (e.g., Production, Maintenance) and state transitions (Start, Stop, Emergency, Reset).
+4. **Functional Sequences & Logic**: Step-by-step process flows, parallel branches, step actions, and the exact transition conditions between steps.
+5. **Safety & Interlocks**: Permissives, alarms, and emergency procedures.
 
-## ⚙️ Process Description
-[Detailed description of the process/system]
+## FORMATTING RULES
+- Use a clear, well-structured hierarchical Markdown schema `#`, `##`, `###`.
+- Use bold text `**` to highlight component names, states, signals, or critical constraints.
+- Use bullet points for lists of components or step-by-step sequences.
+- You may use relevant emojis to make sections visually identifiable.
+- The document must accurately reflect the complexity and depth of the original PDF.
 
-## 📊 Diagrams and Figures
-
-### Figure 1: [Diagram Title]
-**Type:** [P&ID / Timing Diagram / Flowchart / etc.]
-**Description:** [Detailed description of what the diagram shows]
-- [Component 1]: [Description]
-- [Component 2]: [Description]
-- [Connections and relationships]
-
-### Figure 2: [Diagram Title]
-...
-
-## 🔧 Equipment and Components
-[List of all equipment, sensors, actuators mentioned]
-
-## 📥 I/O Configuration
-
-### Inputs (Sensors/Buttons)
-| Name | Type | Description |
-|------|------|-------------|
-| S_EXAMPLE | Digital | Example sensor description |
-
-### Outputs (Actuators/Motors)
-| Name | Type | Description |
-|------|------|-------------|
-| M_EXAMPLE | PWM | Example motor description |
-
-## 🔄 Sequence of Operations
-[Step-by-step process flow]
-
-## ⏱️ Timing Requirements
-[Any timing constraints, delays, durations]
-
-## 🛡️ Safety Requirements
-[Emergency stops, interlocks, safety conditions]
-
-## 📌 Notes
-[Any additional information]
-```
-
-## ⚠️ CRITICAL MARKDOWN TABLE FORMATTING RULES
-
-When generating tables, you MUST follow these rules EXACTLY:
-
-1. **NO blank lines between table rows** - Every row must be on consecutive lines
-2. **Header, separator, and data rows must be adjacent** - No empty lines anywhere in the table
-3. **Use consistent pipe alignment**
-
-✅ CORRECT table format:
-```
-| Name | Type | Description |
-|------|------|-------------|
-| Sensor1 | Digital | First sensor |
-| Sensor2 | Analog | Second sensor |
-```
-
-❌ WRONG - DO NOT add blank lines:
-```
-| Name | Type | Description |
-
-|------|------|-------------|
-
-| Sensor1 | Digital | First sensor |
-```
-
-IMPORTANT:
-- Be thorough - extract EVERY piece of information
-- Image descriptions should be detailed enough to understand the diagram without seeing it
-- Use proper Markdown formatting with emojis for section headers
-- Include all technical specifications and values
-- Tables must have NO blank lines between rows
+## LANGUAGE RULE
+if spec in frensh all output should be in frensh
+if english output english
 """
 
 
@@ -153,16 +94,27 @@ class SpecGenerator:
     This is independent of the ADK agent system.
     """
     
-    def __init__(self, api_url: str = "http://localhost:3001/api/simulation/save-spec"):
-        self.api_url = api_url
-        self.model = "gemini-3-pro-preview"  # Gemini 3 for PDF analysis
+    def __init__(self, api_url: str = None):
+        self._api_url_override = api_url
+        self.model = "gemini-3.1-pro-preview"  # Gemini 3.1 for PDF analysis
+        
+    @property
+    def api_url(self):
+        if self._api_url_override:
+            return self._api_url_override
+        is_docker = os.getenv("IS_DOCKER", "false").lower() == "true"
+        default_backend = "http://backend:3001" if is_docker else "http://localhost:3001"
+        backend_url = os.getenv("BACKEND_URL", default_backend)
+        return f"{backend_url}/api/simulation/save-spec"
     
     async def generate_spec_from_pdf(
         self,
         file_uri: str,
         mime_type: str = "application/pdf",
         project_path: Optional[str] = None,
-        stream_callback=None
+        stream_callback=None,
+        thinking_level: Optional[str] = None,
+        model: Optional[str] = None
     ) -> SpecResult:
         """
         Generate spec.md content from an uploaded PDF with streaming support.
@@ -199,13 +151,22 @@ class SpecGenerator:
                 }
             ]
 
+            # Prepare config
+            config = {}
+            if thinking_level:
+                config["thinking_config"] = {"include_thoughts": True, "thinking_level": thinking_level}
+
+            # Determine which model to use (override default if provided)
+            active_model = model or self.model
+
             # Use streaming if callback provided
             if stream_callback:
                 # Stream the response in real-time
                 spec_content = ""
                 response_stream = client.models.generate_content_stream(
-                    model=self.model,
-                    contents=contents
+                    model=active_model,
+                    contents=contents,
+                    config=config
                 )
 
                 for chunk in response_stream:
@@ -214,15 +175,16 @@ class SpecGenerator:
                         # Call the streaming callback with each chunk
                         await stream_callback(chunk.text)
 
-                print(f"[SpecGenerator] ✅ Streamed spec ({len(spec_content)} chars)")
+                print(f"[SpecGenerator] ✅ Streamed spec ({len(spec_content)} chars) with model={active_model}, thinking_level={thinking_level}")
             else:
                 # Non-streaming fallback
                 response = client.models.generate_content(
-                    model=self.model,
-                    contents=contents
+                    model=active_model,
+                    contents=contents,
+                    config=config
                 )
                 spec_content = response.text
-                print(f"[SpecGenerator] ✅ Generated spec ({len(spec_content)} chars)")
+                print(f"[SpecGenerator] ✅ Generated spec ({len(spec_content)} chars) with model={active_model}, thinking_level={thinking_level}")
 
             # Count described images (rough estimate based on "Figure" occurrences)
             images_count = spec_content.lower().count("### figure")

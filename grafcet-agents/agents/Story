@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A Journey of Innovation</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;700&family=Outfit:wght@300;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #050505;
+            --text-color: #f0f0f0;
+            --accent-color: #6366f1;
+            --secondary-bg: #121212;
+            --glass: rgba(255, 255, 255, 0.08);
+        }
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            line-height: 1.8;
+            overflow-x: hidden;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 60px 20px;
+        }
+        h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 4rem;
+            font-weight: 600;
+            margin-bottom: 3rem;
+            background: linear-gradient(135deg, #fff 0%, #818cf8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-align: center;
+            letter-spacing: -0.02em;
+        }
+        .controls {
+            position: sticky;
+            top: 20px;
+            z-index: 100;
+            display: flex;
+            justify-content: center;
+            margin-bottom: 4rem;
+        }
+        .btn-audio {
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 16px 32px;
+            border-radius: 50px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 10px 25px rgba(99, 102, 241, 0.3);
+            backdrop-filter: blur(10px);
+        }
+        .btn-audio:hover {
+            transform: translateY(-4px) scale(1.02);
+            box-shadow: 0 15px 35px rgba(99, 102, 241, 0.5);
+            background: #4f46e5;
+        }
+        .segment {
+            margin-bottom: 6rem;
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all 0.8s ease-out;
+        }
+        .segment.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .segment p {
+            font-size: 1.4rem;
+            font-weight: 300;
+            margin-bottom: 2.5rem;
+            color: #d1d1d1;
+        }
+        .media-container {
+            width: 100%;
+            border-radius: 20px;
+            overflow: hidden;
+            background: var(--secondary-bg);
+            border: 1px solid var(--glass);
+            margin-top: 1.5rem;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+            position: relative;
+        }
+        img, video {
+            width: 100%;
+            display: block;
+            transition: transform 0.5s ease;
+        }
+        .media-container:hover img {
+            transform: scale(1.02);
+        }
+        .footer {
+            text-align: center;
+            padding: 80px 40px;
+            font-size: 1rem;
+            opacity: 0.4;
+            border-top: 1px solid var(--glass);
+            margin-top: 4rem;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-color); }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #444; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>A Journey of Innovation</h1>
+        
+        <div class="controls">
+            <button class="btn-audio" onclick="toggleAudio()">
+                <span id="audioIcon">▷</span> <span id="btnText">Experience the Narration</span>
+            </button>
+            <audio id="storyAudio" src="story_narration.mp3"></audio>
+        </div>
+
+        <div id="segments">
+            <div class="segment"><p>A story of innovation and discovery.</p><div class="media-container"><img src="generated_scene.jpg" alt="Story Scene"></div></div>
+        </div>
+
+        <div class="footer">
+            Design & Narrative crafted by AI Storyteller
+        </div>
+    </div>
+
+    <script>
+        const audio = document.getElementById('storyAudio');
+        const btnText = document.getElementById('btnText');
+        const audioIcon = document.getElementById('audioIcon');
+
+        function toggleAudio() {
+            if (audio.paused) {
+                audio.play();
+                btnText.innerText = "Pause Story";
+                audioIcon.innerText = "⃞";
+            } else {
+                audio.pause();
+                btnText.innerText = "Resume Story";
+                audioIcon.innerText = "▷";
+            }
+        }
+        
+        audio.onended = () => {
+            btnText.innerText = "Experience the Narration";
+            audioIcon.innerText = "▷";
+        };
+
+        // Intersection Observer for scroll animations
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, { threshold: 0.1 });
+
+        document.querySelectorAll('.segment').forEach(seg => observer.observe(seg));
+    </script>
+</body>
+</html>

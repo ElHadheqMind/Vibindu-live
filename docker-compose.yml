@@ -13,8 +13,12 @@ services:
       - GOOGLE_CLIENT_ID=217584639313-2qj39nfi4k0phh0nu81lhbgvsp5kdn5b.apps.googleusercontent.com
       # Set CORS origin for frontend container and local dev
       - CORS_ORIGIN=http://localhost:3000,http://localhost:5173
+      # Gemini API key for image/video rendering
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
     volumes:
       - ./data:/app/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
       # Hot reload for dev (optional, if you want to modify code)
       # - ./grafcet-backend/src:/app/src
 
@@ -22,12 +26,24 @@ services:
     build: ./grafcet-agents
     ports:
       - "8000:8000"
+      - "3002:3002"
+      - "3003:3003"
+      - "3004:3004"
+      - "3005:3005"
     environment:
       - PORT=8000
       - GEMINI_API_KEY=${GEMINI_API_KEY}
-    # Mount agents code for hot reload (optional)
-    # volumes:
-    #   - ./grafcet-agents/agents:/app/agents
+      - BACKEND_URL=http://backend:3001
+      - STORAGE_PATH=/app/data
+      - IS_DOCKER=true
+      - FRONTEND_URL=${FRONTEND_URL:-http://frontend:80}
+      - ORCHESTRATOR_URL=http://localhost:8000
+      - COMPUTER_AGENT_URL=ws://localhost:8000/computer/ws/computer-use
+      - STORYTELLER_URL=http://localhost:8000/storyteller/storytell
+    volumes:
+      - ./data:/app/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   frontend:
     build: ./grafcet-editor

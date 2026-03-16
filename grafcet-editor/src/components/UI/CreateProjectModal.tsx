@@ -287,23 +287,18 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
           useElementsStore.getState().loadElements([]);
         }
 
-        usePopupStore.getState().showSuccess(
-          'Project Created',
-          `Project "${projectName}" has been created successfully!`
-        );
-
-        // Close modal
+        // Close modal and immediately navigate into the project
         onClose();
 
         // Navigate to the project path to auto-open it
-        // Use the projectPath from response to navigate directly to the project
+        // Use navigate() instead of window.location.href to stay within SPA (preserve auth state, no full reload)
         const projectPath = response.projectPath || (response.project as GrafcetProject).localPath;
         if (projectPath) {
-          // Navigate using the project query parameter for compatibility
-          window.location.href = `/?project=${encodeURI(projectPath)}`;
+          // Navigate to /welcome with the project path as query param
+          navigate(`/welcome?project=${encodeURIComponent(projectPath)}`, { replace: true });
         } else {
           // Fallback to basic navigation
-          navigate('/', {
+          navigate('/welcome', {
             replace: true,
             state: {
               projectCreated: true,

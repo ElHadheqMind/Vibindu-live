@@ -320,7 +320,9 @@ export const useGsrsmFileStore = create<GsrsmFileState>()(
           } else {
             const error = response.error || 'Failed to load diagram from backend';
             console.error('❌ [GsrsmFileStore] Restore failed:', error);
+            // Clear the stale file path so we don't keep retrying a non-existent file
             set({
+              currentFilePath: null,
               isLoadingDiagram: false,
               diagramLoadError: error
             });
@@ -329,7 +331,9 @@ export const useGsrsmFileStore = create<GsrsmFileState>()(
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error);
           console.error('❌ [GsrsmFileStore] Restore error:', errorMessage);
+          // Clear the stale file path so it doesn't cause repeated failures
           set({
+            currentFilePath: null,
             isLoadingDiagram: false,
             diagramLoadError: errorMessage
           });

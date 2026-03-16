@@ -15,6 +15,7 @@ from toolkit import UpdateGsrsmModesTool
 from compile_save_tool import CompileAndSaveSFCTool
 from simulation_tool import RunSimulationTool
 from get_sfc_tool import GetSFCContentTool
+from dispatch_tools import dispatch_tools
 
 # Legacy/Additional Tools (for Assistant agent)
 from toolkit import (
@@ -36,6 +37,10 @@ update_gsrsm_tool = UpdateGsrsmModesTool()
 compile_save_tool = CompileAndSaveSFCTool()
 run_simulation_tool = RunSimulationTool()
 get_sfc_content_tool = GetSFCContentTool()
+
+# A2A Dispatch Tools
+dispatch_to_computer_tool = dispatch_tools.dispatch_to_computer_agent
+dispatch_to_storyteller_tool = dispatch_tools.dispatch_to_storyteller
 
 # Legacy tools (for Assistant agent only)
 navigate_tool = NavigateTool()
@@ -72,6 +77,8 @@ def get_toolkit() -> Dict[str, Callable]:
         "CompileAndSaveSFC": compile_save_tool.execute,
         "GetSFCContent": get_sfc_content_tool.get_sfc_content,
         "RunSimulation": run_simulation_tool.execute,
+        "dispatch_to_computer_agent": dispatch_to_computer_tool,
+        "dispatch_to_storyteller": dispatch_to_storyteller_tool,
     }
 
 

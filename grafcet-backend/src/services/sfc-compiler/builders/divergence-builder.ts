@@ -23,7 +23,7 @@ export function handleDivergence(
     y: number,
     prevElementId: string,
     processSequence: ProcessSequenceFn
-): { convergenceGateId: string, nextY: number, lastElementId: string } {
+): { convergenceGateId: string, nextY: number, lastElementId: string, firstElementId: string } {
 
     const isAnd = divergenceData.divergenceType === 'AND';
     const branchCount = divergenceData.branches.length;
@@ -255,5 +255,5 @@ export function handleDivergence(
         nextY += OFFSET_TRANS_TO_NEXT_STEP;
     }
 
-    return { convergenceGateId, nextY, lastElementId };
+    return { convergenceGateId, nextY, lastElementId, firstElementId: divergenceGateId };
 }

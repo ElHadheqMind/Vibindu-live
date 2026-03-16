@@ -1,5 +1,6 @@
 import aiohttp
 import logging
+import os
 from typing import Optional, List, Dict, Any
 from base_tool import BaseTool
 
@@ -11,6 +12,7 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+BACKEND_URL = os.getenv("BACKEND_URL", "http://backend:3001" if os.getenv("IS_DOCKER", "false").lower() == "true" else "http://localhost:3001")
 
 class RunSimulationTool(BaseTool):
     """Launches a real simulation for a specific SFC file with step-by-step execution.
@@ -20,7 +22,7 @@ class RunSimulationTool(BaseTool):
     Reads from: tool_context.state['sfc_files'], tool_context.state['project_path']
     """
 
-    def __init__(self, api_base: str = "http://localhost:3001/api/simulation"):
+    def __init__(self, api_base: str = f"{BACKEND_URL}/api/simulation"):
         super().__init__(
             name="RunSimulation",
             description="Launches a real simulation for a specific SFC file with step-by-step execution. Supports scenario-based testing with variable manipulation.",

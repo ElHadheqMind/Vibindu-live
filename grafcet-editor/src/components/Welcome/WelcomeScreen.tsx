@@ -1,6 +1,7 @@
 import React from 'react';
 import styled, { keyframes } from 'styled-components';
 import { FiPlus, FiFolder, FiClock, FiFile, FiFolderPlus, FiChevronRight, FiTrash2 } from 'react-icons/fi';
+import { useNavigate } from 'react-router-dom';
 import { useProjectStore } from '../../store/useProjectStore';
 
 import { usePopupStore } from '../../store/usePopupStore';
@@ -201,19 +202,12 @@ const ItemName = styled.div`
   font-weight: 500;
   font-size: 14px;
   color: ${props => props.theme.text};
-  margin-bottom: 2px;
+  margin-bottom: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 `;
 
-const ItemPath = styled.div`
-  font-size: 12px;
-  color: ${props => props.theme.textTertiary};
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-`;
 
 const EmptyState = styled.div`
   display: flex;
@@ -273,6 +267,7 @@ interface WelcomeScreenProps {
 }
 
 const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onClose }) => {
+    const navigate = useNavigate();
     const {
         projects,
         remoteProjects,
@@ -350,24 +345,9 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onClose }) => {
                         loadProject(project as any);
                         setCurrentProject(project.id);
                         if ((project as any).diagrams && (project as any).diagrams.length > 0) {
-
-
-                            // Ideally we constructed relative path from base. But we can just use the project path + diagram name if that matches structure.
-                            // Better: construct the URL ?file=... 
-                            // Since we don't have the basePath here easily (it's in MainApp), we can try to rely on the project's localPath + diagram name
-                            // BUT for Grafcet projects, diagrams might not be individual files in the same way.
-                            // IF the diagrams are embedded in project.json, we can't deep link to them via file system path easily unless they ARE files.
-                            // Assuming they are separate files if we want deep linking:
-                            // Actually, GrafcetProject usually has `diagrams`. 
-                            // If we want to use the "Link Logic", we need to pass a file path that MainApp understands.
-                            // If Grafcet diagrams are inside project.json, then ?file=project.json might load the project?
-                            // The user said "go to a file in that project".
-                            // If we just navigate to the project file: projectItem.localPath
-
                             const projectPath = project.localPath;
-                            // We need to convert this to a relative path or use absolute. MainApp handles absolute.
-                            // Using encodeURI preserves slashes, unlike encodeURIComponent
-                            window.location.href = `/?project=${encodeURI(projectPath || '')}`;
+                            // Navigate within SPA context to preserve auth state (no full reload)
+                            navigate(`/welcome?project=${encodeURIComponent(projectPath || '')}`, { replace: true });
                         } else {
                             // Fallback if no diagrams or empty
                             onClose();
@@ -377,7 +357,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onClose }) => {
                         // GSRSM Project
                         // For GSRSM, the project IS the file usually (.gsrsm)
                         const filePath = project.localPath;
-                        window.location.href = `/?project=${encodeURI(filePath || '')}`;
+                        navigate(`/welcome?project=${encodeURIComponent(filePath || '')}`, { replace: true });
                     }
                 }
             } catch (error) {
@@ -392,11 +372,10 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onClose }) => {
             const isGrafcet = project && (project.diagrams !== undefined || (project as any).type === 'grafcet');
 
             if (isGrafcet && project.diagrams && project.diagrams.length > 0) {
-                // We want to navigate to the project file so MainApp loads it.
-                // Assuming project.localPath points to the project JSON file.
-                window.location.href = `/?project=${encodeURI(project.localPath || '')}`;
+                // Navigate within SPA context to preserve auth state (no full reload)
+                navigate(`/welcome?project=${encodeURIComponent(project.localPath || '')}`, { replace: true });
             } else if (!isGrafcet && project) {
-                window.location.href = `/?project=${encodeURI(project.localPath || '')}`;
+                navigate(`/welcome?project=${encodeURIComponent(project.localPath || '')}`, { replace: true });
             } else {
                 // Fallback
                 setCurrentProject(projectItem.id);
@@ -406,21 +385,6 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onClose }) => {
         }
     };
 
-    const formatDate = (dateString: string) => {
-        const date = new Date(dateString);
-        const now = new Date();
-        const diffMs = now.getTime() - date.getTime();
-        const diffMins = Math.floor(diffMs / 60000);
-        const diffHours = Math.floor(diffMs / 3600000);
-        const diffDays = Math.floor(diffMs / 86400000);
-
-        if (diffMins < 1) return 'Just now';
-        if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
-        if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
-        if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-
-        return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-    };
 
     const handleDeleteProject = async (project: any, event: React.MouseEvent) => {
         event.stopPropagation(); // Prevent project opening
@@ -519,9 +483,6 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onClose }) => {
                                         </ItemIcon>
                                         <ItemContent>
                                             <ItemName>{project.name}</ItemName>
-                                            <ItemPath>
-                                                {project.localPath || 'No path'} • {formatDate(project.updatedAt)}
-                                            </ItemPath>
                                         </ItemContent>
                                         <DeleteButton
                                             onClick={(e) => handleDeleteProject(project, e)}

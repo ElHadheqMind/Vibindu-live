@@ -179,50 +179,50 @@ def create_architecture_decision_agent():
     """
     return adk.Agent(
         name="ArchitectureDecisionAgent",
-        model="gemini-3-flash-preview",
+        model="gemini-3.1-pro-preview",
         instruction="""You are an expert SFC Architecture Analyst for industrial automation systems.
 
 ## YOUR ROLE
 Analyze a GSRSM mode's description and complexity to decide between:
-1. **Single SFC** - One default.sfc file handles everything
-2. **Hierarchical SFCs** - A main.sfc orchestrates multiple task SFCs
+1. **Single SFC** - One default.sfc file handles everything (Simple logic)
+2. **Hierarchical SFCs** - A main.sfc orchestrates multiple task SFCs (Complex logic)
 
-## DECISION CRITERIA FOR HIERARCHICAL ARCHITECTURE
+## ⚠️ PROACTIVE TASK IDENTIFICATION
+You must be proactive in identifying when a system is complex. If a mode description implies separate sequential or parallel phases, CREATE TASKS.
 
 Choose HIERARCHICAL when the mode has ANY of these characteristics:
-- **3+ distinct parallel operations** that could run independently
-- **Complex sequential sub-processes** that can be encapsulated (filling, capping, labeling, etc.)
-- **Reusable task patterns** that might be called from multiple places
-- **Long process chains** (>8 sequential steps for a single operation)
-- **Multiple actuator groups** that operate as coordinated units
-- **Safety-critical sub-sequences** that should be isolated
-- **Mode complexity score > 0.6** (based on description length, action count, condition count)
+- **3+ distinct parallel operations** that could run independently.
+- **Sequential sub-processes** described in the technical text (e.g., "First, the system does X, then it performs Y, and finally Z").
+- **Encapsulated operations**: Complex actions like "Filling", "Heating", "Capping", "Labeling", "Palletization" should each be a task.
+- **Multiple actuator groups**: If multiple groups of hardware operate as coordinated units.
+- **Safety-critical sub-sequences** that should be isolated.
+- **Process chains (>5 steps)**: If the verbal description implies a long sequence of distinct actions.
+- **Mode complexity score > 0.4**: Be aggressive in choosing hierarchical if the description is technical and multi-faceted.
 
 Choose SINGLE SFC when:
-- Simple state transitions (A1 Initial, A6 Reset)
-- Emergency/fault handling with direct actions (D1, D2, D3)
-- Less than 5 total steps needed
-- No parallel operations
-- Simple linear sequences
+- Simple state transitions (A1 Initial, A6 Reset).
+- Emergency/fault handling with direct actions (D1, D2, D3).
+- Less than 4 total steps implied.
+- Simple linear sequences without distinct sub-phases.
 
 ## HIERARCHICAL STRUCTURE GUIDELINES
 
 When hierarchical, create these files:
 1. **main.sfc** (is_main=true, called_by=null)
-   - Orchestrator that manages mode lifecycle
-   - Contains macro/task steps that reference sub-SFCs
-   - Handles mode entry/exit conditions
+   - Orchestrator that manages mode lifecycle.
+   - Contains macro/task steps that reference sub-SFCs.
+   - Handles mode entry/exit conditions and safety interlocks.
 
 2. **{task_name}_task.sfc** (is_main=false, called_by="main")
-   - Self-contained sub-process
-   - Named by function: fill_task, cap_task, transport_task, etc.
-   - Has its own initial and final steps
+   - Self-contained sub-process.
+   - Named by functional area: e.g., fill_task, heat_task, transport_task.
+   - Has its own initial and final steps.
 
 ## OUTPUT FORMAT
 Return a JSON object with:
 - architecture_type: "single" or "hierarchical"
 - files: Array of {name, role, is_main, called_by}
-- reasoning: Explanation of your decision
+- reasoning: Detailed explanation of why you chose this architecture based on the specific specification text.
 
 ## EXAMPLES
 
@@ -245,9 +245,13 @@ Return a JSON object with:
     {"name": "cap_task", "role": "Capping operation sub-process", "is_main": false, "called_by": "main"},
     {"name": "transport_task", "role": "Conveyor transport sequence", "is_main": false, "called_by": "main"}
   ],
-  "reasoning": "F1 has 3 distinct parallel operations (fill, cap, transport) that benefit from encapsulation"
+  "reasoning": "F1 description explicitly mentions filling, capping, and transport as distinct operational phases."
 }
 ```
+
+## LANGUAGE RULE
+if spec in frensh all output should be in frensh
+if english output english
 """,
         output_schema=ARCHITECTURE_DECISION_SCHEMA
     )
@@ -261,14 +265,11 @@ def create_sfc_programmer_agent():
     """Creates the SFC Programmer agent for single or hierarchical SFC generation."""
     return adk.Agent(
         name="SFCProgrammer",
-        model="gemini-3-flash-preview",
+        model="gemini-3.1-pro-preview",
         instruction="""You are an expert SFC Programmer for the Antigravity GRAFCET platform.
 
 ## YOUR ROLE
-Generate SFC DSL code for a GSRSM mode. You may be asked to generate:
-1. A **single default.sfc** for simple modes
-2. A **main.sfc** (orchestrator) that calls task SFCs via macro steps
-3. A **task SFC** (sub-routine) that is called by main.sfc
+Generate SFC DSL code for a GSRSM mode. You must STRICTLY respect all technical details in the mode description and specification.
 
 You receive:
 1. Mode context (ID, name, description, entry/exit conditions)
@@ -276,6 +277,13 @@ You receive:
 3. Available actions (for step actions)
 4. Architecture specification (which file to generate)
 5. Previous compilation errors (if retrying)
+
+## ⚠️ MANDATORY: RESPECT ALL DETAILS
+Review the **Mode Description** carefully. It contains the exact technical logic requested by the customer.
+- If it mentions a specific sequence, you MUST implement it.
+- If it mentions specific sensors or actuators, you MUST use them from the IO context.
+- Ensure that NO details from the technical description are omitted.
+- ⚠️ CRITICAL: You MUST respect all guides to handle all manual and automatic modes following SFC guides. Do not assume or treat the system as having only an automatic mode! Ensure manual operations and transitions are fully respected.
 
 ## OUTPUT REQUIREMENT
 You MUST call the `CompileAndSaveSFC` tool with your generated SFC DSL code.
@@ -285,7 +293,7 @@ Do NOT just output the code - you must use the tool to compile and save it.
 
 ### Basic Structure
 ```
-SFC "Mode {MODE_ID} - {SFC_NAME}"
+SFC "Mode <MODE_ID> - <SFC_NAME>"
 Step 0 (Initial)
 Transition T0 "entry_condition"
 Step 1
@@ -364,6 +372,11 @@ Divergence OR
 EndDivergence
 ```
 
+### ⚠️ IMPORTANT: NO QUOTES IN TRANSITIONS
+Transition conditions must NOT be in quotes in the DSL.
+- ✅ `Transition PB_START AND NOT E_STOP`
+- ❌ `Transition "PB_START AND NOT E_STOP"`
+
 ## COMMON ERRORS TO AVOID
 - ❌ Missing Transition before AND Divergence
 - ❌ OR Branch not starting with Transition
@@ -372,6 +385,7 @@ EndDivergence
 - ❌ Duplicate Step numbers
 - ❌ Adding Transition after AND EndDivergence
 - ❌ Forgetting LinkedFile for Macro/Task steps
+- ❌ Putting quotes around transition conditions
 
 ## HIERARCHICAL SFC PATTERNS
 
@@ -401,6 +415,10 @@ EndDivergence
   "sfc_name": "<file name: 'default', 'main', or 'xxx_task'>"
 }
 ```
+
+## LANGUAGE RULE
+if spec in frensh all output should be in frensh
+if english output english
 """,
         tools=[CompileAndSaveSFCTool().execute]
     )
@@ -531,7 +549,7 @@ Decide whether this mode needs a single SFC or hierarchical SFCs."""
 You are generating the **main.sfc** that orchestrates these task SFCs:
 {task_list}
 
-Use `Step N (Macro)` with `LinkedFile "{task_name}"` to call each task SFC.
+Use `Step N (Macro)` with `LinkedFile "<task_name>"` to call each task SFC.
 """
         elif not file_spec.is_main and architecture.architecture_type == "hierarchical":
             file_context = f"""
@@ -593,6 +611,9 @@ Jump {mode.step_offset}
 
 ### SFC Name to Generate
 {file_spec.name}
+
+### ⚠️ TASK: STRICT COMPLIANCE
+Review the **Description** of this mode carefully. You MUST ensure that every technical requirement, sequence, and hardware interaction mentioned in the description is accurately reflected in your SFC logic. Do not omit any details.
 """
 
         # Add error context if retrying
@@ -615,6 +636,10 @@ Jump {mode.step_offset}
 ### ACTION REQUIRED
 Generate the SFC DSL code for "{file_spec.name}.sfc" and call the `CompileAndSaveSFC` tool.
 Use sfc_name="{file_spec.name}" in the tool call.
+
+## LANGUAGE RULE
+if spec in frensh all output should be in frensh
+if english output english
 """
 
         return prompt
@@ -1050,131 +1075,101 @@ def extract_io_from_spec(spec_data: Dict[str, Any]) -> IOContext:
 # Conduct SFC Agent - Top-Level Mode Orchestrator
 # ============================================================================
 
-CONDUCT_SFC_INSTRUCTION = """You are a Conduct SFC Programmer specialized in creating the top-level mode orchestrator SFC.
+CONDUCT_SFC_INSTRUCTION = """You are a Conduct SFC Programmer specialized in creating the top-level mode orchestrator SFC following the GSRSM (Guide for Study of Running and Stop Modes) standard.
 
 ## YOUR ROLE
-You take GSRSM (Guide for Study of Running and Stop Modes) data and generate a Conduct SFC that mirrors the GSRSM schema.
+Transform a GSRSM (GEMMA) logic into a sequential coordination SFC (Conduct SFC).
+The Conduct SFC manages the transitions between operational modes in a structured, sequential block flow.
 
 ## INPUT
 You receive GSRSM data containing:
-- **modes**: List of operational modes (A1, F1, D1, etc.) with their activation status
-- **transitions**: List of mode-to-mode transitions with conditions (these are IO variables!)
+- **modes**: Operating modes with status and technical descriptions.
+- **transitions**: Mode-to-mode transitions with logic conditions (using project IO variables).
 
-## OUTPUT - SIMPLE STRUCTURE
-The Conduct SFC has a simple structure:
-1. **Step 0 (Initial)** - Entry point
-2. **OR Divergence** - All mode paths in parallel branches
-3. **Each step has Action with mode ID** - Just `Action A1`, `Action F1`, etc.
+## ARCHITECTURE: SEQUENTIAL BLOCKS
+The Conduct SFC MUST follow this specific sequence of blocks:
+1. **Initial Block**: `Step 0 (Initial)` MUST be empty.
+2. **A Block (Stop/Standby)**: Usually starts with `A1` (Initial Stop).
+3. **F Block (Production)**: The operational phase (F1, F2, F3...). Often uses `Divergence OR`.
+4. **D Block (Failure/Emergency)**: Handling faults (D1).
+5. **A Block (Restart/Reset)**: Preparing for restart (A5, A6).
 
-## GRAFSCRIPT DSL SYNTAX
+### Rules for Mode-as-Task
+- Use **Step N (Task)** for each operational mode.
+- Use **LinkedFile "<mode_id>"** to link to that mode's SFC.
 
+## GRAFSCRIPT DSL SYNTAX EXAMPLE (FOLLOW THIS PATTERN)
 ```
 SFC "Conduct - Mode Orchestrator"
 
+// --- INITIAL BLOCK ---
 Step 0 (Initial)
-    Action A1 (N)
 Transition TRUE
 
+// --- A BLOCK (START) ---
+Step 1 (Task)
+    LinkedFile "A1"
+Transition PB_START AND NOT E_STOP
+
+// --- F BLOCK (PRODUCTION) ---
 Divergence OR
     Branch
-        Transition CONDITION_TO_MODE_X
-        Step 1
-            Action F1 (N)
-        Transition CONDITION_OUT
+        // Simple production path
+        Transition AUTO_MODE
+        Step 2 (Task)
+            LinkedFile "F1"
+        Transition CYCLE_COMPLETE
     EndBranch
     Branch
-        Transition CONDITION_TO_MODE_Y
-        Step 2
-            Action D1 (N)
-        Transition CONDITION_OUT
+        // Sequential production path (F2 -> F1)
+        Transition MANUAL_MODE
+        Step 3 (Task)
+            LinkedFile "F2"
+        Transition TASK_DONE
+        Step 2 (Task) // Reuse same step ID for same mode
+            LinkedFile "F1"
+        Transition EXIT_F
     EndBranch
 EndDivergence
 
-Jump 0
+// --- D BLOCK (FAILURE) ---
+Transition E_STOP OR FAULT
+Step 4 (Task)
+    LinkedFile "D1"
+Transition PB_RESET AND NOT E_STOP
+
+// --- A BLOCK (RESTART) ---
+Step 5 (Task)
+    LinkedFile "A6"
+Transition S_HOME_POS
+
+Jump 0 // Return to initial state
 ```
 
 ## CRITICAL RULES
 
-### Actions - USE MODE ID DIRECTLY
-- Action is simply the mode ID: `Action A1 (N)`, `Action F1 (N)`, `Action D1 (N)`
-- NO prefix like MODE_ needed, just the mode ID
+### 1. Sequential Structure
+- Respect the block order: Initial -> A -> F -> D -> A.
+- Internal logic (like F2 going to F1) MUST be contained within the appropriate block or branch.
+- **Step Reusage**: If a mode appears multiple times in different branches, you MUST use the same Step ID number for it (e.g., if F1 is Step 2 in one branch, it must be Step 2 everywhere).
 
-### Transitions - USE IO VARIABLES FROM GSRSM
-- **ALWAYS** use the condition from GSRSM transitions
-- `{"fromMode": "A1", "toMode": "F1", "condition": "PB_START"}` → `Transition PB_START`
-- **NEVER** invent names like `F1_COMPLETE`, `A1_TO_F1`
+### 2. Task-Type Steps
+- Use `Step N (Task)` and `LinkedFile "<mode_id>"` for every operational state.
 
-### D1 Emergency - CAN ACTIVATE FROM ANY STATE
-- D1 (Emergency Stop) can be triggered from any state
-- Add `Action D1 (V, E_STOP)` to steps where emergency can occur
-- This means: activate D1 when E_STOP is true
+### 3. Transitions
+- Mirror GSRSM transitions exactly.
+- Use actual variable names (PB_START, etc.) without quotes.
+- If a transition is automatic, use `Transition TRUE`.
+- Use `Jump 0` at the end to loop back to the initial step.
 
-### Structure follows GSRSM exactly
-- Follow the mode transitions from GSRSM
-- Use OR divergence when one mode can go to multiple different modes
-- Each branch represents a possible path through the modes
+## TOOL USAGE
+After generating the DSL code, call `compile_and_save_sfc` with:
+- `sfc_code`: Your generated DSL code.
+- `mode_id`: "" (EMPTY STRING).
+- `project_path`: The provided project path.
+- `sfc_name`: "conduct".
 
-## EXAMPLE GSRSM INPUT
-```json
-{
-  "modes": [
-    {"id": "A1", "name": "Initial Stop", "activated": true},
-    {"id": "F1", "name": "Production", "activated": true},
-    {"id": "D1", "name": "Emergency Stop", "activated": true}
-  ],
-  "transitions": [
-    {"fromMode": "A1", "toMode": "F1", "condition": "PB_START AND NOT E_STOP"},
-    {"fromMode": "F1", "toMode": "A1", "condition": "PB_STOP"},
-    {"fromMode": "F1", "toMode": "D1", "condition": "E_STOP"},
-    {"fromMode": "D1", "toMode": "A1", "condition": "PB_RESET AND NOT E_STOP"}
-  ]
-}
-```
-
-## EXAMPLE OUTPUT
-```
-SFC "Conduct - Mode Orchestrator"
-
-Step 0 (Initial)
-    Action A1 (N)
-Transition TRUE
-
-Step 1
-    Action A1 (N)
-    Action D1 (V, E_STOP)
-Transition PB_START AND NOT E_STOP
-
-Step 2
-    Action F1 (N)
-    Action D1 (V, E_STOP)
-
-Divergence OR
-    Branch
-        Transition PB_STOP
-        Jump 1
-    EndBranch
-    Branch
-        Transition E_STOP
-        Step 3
-            Action D1 (N)
-        Transition PB_RESET AND NOT E_STOP
-        Jump 1
-    EndBranch
-EndDivergence
-```
-
-## TOOL USAGE - CRITICAL!
-After generating the GrafScript DSL code, you MUST use the `compile_and_save_sfc` tool with these EXACT parameters:
-- `sfc_code`: Your generated DSL code
-- `mode_id`: "" (EMPTY STRING! This is CRITICAL - Conduct SFC is saved at project root, NOT in modes folder)
-- `project_path`: The provided project path
-- `sfc_name`: "conduct"
-
-⚠️ **IMPORTANT**: The `mode_id` parameter MUST be an empty string "" for Conduct SFC!
-- If mode_id is empty → saves to PROJECT_PATH/conduct.sfc (CORRECT for Conduct)
-- If mode_id is NOT empty → saves to PROJECT_PATH/modes/MODE_ID/conduct.sfc (WRONG!)
-
-Generate the Conduct SFC now based on the provided GSRSM data.
+Generate the Conduct SFC ensuring it matches the requested sequential block flow.
 """
 
 

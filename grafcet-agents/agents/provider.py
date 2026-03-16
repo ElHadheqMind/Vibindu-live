@@ -4,8 +4,8 @@ from typing import Optional, AsyncGenerator
 import google.generativeai as genai
 
 class GeminiProvider:
-    """Provider for Gemini 3 Flash supporting streaming and thinking processes."""
-    def __init__(self, model_name: str = "gemini-3-pro-preview"):
+    """Provider for Gemini 3.1 Flash Lite supporting streaming and thinking processes."""
+    def __init__(self, model_name: str = "gemini-3.1-pro-preview"):
         # Get API key from environment
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
@@ -22,7 +22,8 @@ class GeminiProvider:
         prompt: str, 
         system_prompt: str = "",
         on_thinking: callable = None,
-        on_tool: callable = None
+        on_tool: callable = None,
+        thinking_level: Optional[str] = None
     ) -> AsyncGenerator[str, None]:
         """
         Streams text chunks from Gemini with thinking and tool usage callbacks.
@@ -32,23 +33,31 @@ class GeminiProvider:
             system_prompt: System instructions
             on_thinking: Callback for thinking/reasoning tokens
             on_tool: Callback when tool is used
+            thinking_level: Optional thinking level (minimal, low, medium, high)
         """
-        print(f"[GEMINI] Streaming response for: {prompt[:50]}...")
+        print(f"[GEMINI] Streaming response for: {prompt[:50]}... (Model: {self.model_name}, Thinking: {thinking_level})")
         
         try:
             # Combine system prompt and user prompt
             full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
             
+            # Prepare generation config
+            generation_config = {
+                "temperature": 0.3,
+                "top_p": 0.95,
+                "top_k": 40,
+                "max_output_tokens": 16384,
+            }
+            
+            # Add thinking level if provided
+            if thinking_level:
+                generation_config["thinking_level"] = thinking_level
+            
             # Stream response from Gemini
             response = await self.model.generate_content_async(
                 full_prompt,
                 stream=True,
-                generation_config={
-                    "temperature": 0.7,
-                    "top_p": 0.95,
-                    "top_k": 40,
-                    "max_output_tokens": 8192,
-                }
+                generation_config=generation_config
             )
             
             async for chunk in response:
@@ -59,23 +68,30 @@ class GeminiProvider:
             print(f"[GEMINI] Streaming Error: {e}")
             yield f"Error: {str(e)}"
     
-    async def generate(self, prompt: str, system_prompt: str = "") -> str:
+    async def generate(self, prompt: str, system_prompt: str = "", thinking_level: Optional[str] = None) -> str:
         """
         Generate complete response from Gemini
         """
-        print(f"[GEMINI] Generating response for: {prompt[:50]}...")
+        print(f"[GEMINI] Generating response for: {prompt[:50]}... (Model: {self.model_name}, Thinking: {thinking_level})")
         
         try:
             full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
             
+            # Prepare generation config
+            generation_config = {
+                "temperature": 0.3,
+                "top_p": 0.95,
+                "top_k": 40,
+                "max_output_tokens": 16384,
+            }
+            
+            # Add thinking level if provided
+            if thinking_level:
+                generation_config["thinking_level"] = thinking_level
+                
             response = await self.model.generate_content_async(
                 full_prompt,
-                generation_config={
-                    "temperature": 0.7,
-                    "top_p": 0.95,
-                    "top_k": 40,
-                    "max_output_tokens": 8192,
-                }
+                generation_config=generation_config
             )
             
             return response.text
@@ -85,9 +101,9 @@ class GeminiProvider:
             return f"Error: {str(e)}"
 
 # Global instance factory
-def get_provider():
+def get_provider(model_name: str = "gemini-3.1-pro-preview"):
     """
     Returns the Gemini provider instance
-    Uses gemini-3-pro-preview for best performance
+    Uses gemini-3.1-pro-preview for best performance
     """
-    return GeminiProvider(model_name="gemini-3-pro-preview")
+    return GeminiProvider(model_name=model_name)

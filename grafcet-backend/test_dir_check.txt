@@ -1,2 +1,0 @@
-﻿DEBUG_PATH
-{"success":true,"isValid":false}

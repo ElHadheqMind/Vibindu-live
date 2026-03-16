@@ -4,6 +4,7 @@ import styled from 'styled-components';
 import { useSearchParams } from 'react-router-dom';
 import { FiPlay, FiCheckCircle, FiAlertCircle } from 'react-icons/fi';
 import { useSimulationStore } from '../../store/useSimulationStore';
+import { AGENTS_BASE_URL } from '../../config';
 
 const Container = styled.div`
   display: flex;
@@ -336,9 +337,9 @@ const ToolTester: React.FC<ToolTesterProps> = ({ onExecute }) => {
 
         // Handle RunSimulationSequence - send via WebSocket for streaming
         if (payload.tool === "RunSimulationSequence") {
-          // Send via WebSocket to trigger streaming
-          const host = (window.location.hostname === 'localhost' || !window.location.hostname) ? '127.0.0.1' : window.location.hostname;
-          const ws = new WebSocket(`ws://${host}:8000/ws/vibe`);
+          // Use dynamic URL from config with protocol switching for production (WSS)
+          const wsUrl = AGENTS_BASE_URL.replace('http://', 'ws://').replace('https://', 'wss://') + '/ws/vibe';
+          const ws = new WebSocket(wsUrl);
 
           ws.onopen = () => {
             console.log("[ToolTester] Sending RunSimulationSequence via WebSocket...");

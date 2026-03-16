@@ -30,9 +30,9 @@ from google.genai.types import ThinkingConfig
 logger = logging.getLogger(__name__)
 
 # Model and thinking configuration
-# Architected to exploit the advanced reasoning and precision of the Gemini 3 model.
-DEFAULT_MODEL = "gemini-3-pro-preview"
-DEFAULT_THINKING_LEVEL = "low"
+# Architected to exploit the advanced reasoning and precision of the Gemini 3.1 model.
+DEFAULT_MODEL = "gemini-3.1-pro-preview"
+DEFAULT_THINKING_LEVEL = "medium"
 
 # ============================================================================
 # THINKING PLANNER - Enables real-time streaming of model thoughts
@@ -641,7 +641,7 @@ def create_thinking_planner_with_level(thinking_level: str) -> BuiltInPlanner:
 
     Gemini 3 thinking levels:
     - gemini-3-pro-preview: low, high
-    - gemini-3-flash-preview: minimal, low, medium, high
+    - gemini-3.1-flash-lite-preview: minimal, low, medium, high
     """
     return BuiltInPlanner(
         thinking_config=ThinkingConfig(
@@ -656,7 +656,7 @@ def create_configured_swarm(model: str = DEFAULT_MODEL, thinking_level: str = DE
     Creates a fully configured orchestrator with the specified model and thinking level.
 
     This allows runtime configuration from the frontend:
-    - model: gemini-3-pro-preview or gemini-3-flash-preview
+    - model: gemini-3.1-pro-preview or gemini-3.1-flash-lite-preview
     - thinking_level: minimal (Flash only), low, medium (Flash only), high
 
     Returns:

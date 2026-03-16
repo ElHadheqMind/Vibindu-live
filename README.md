@@ -16,43 +16,89 @@
 - 💾 **Cloud Storage** - User-scoped project persistence with Flydrive
 - 🎯 **IEC 61131-3 Compliant** - Industry-standard SFC action types and structures
 
-## 🏗️ Architecture
+## 🏗️ Architecture (Agents, Frontend, Backend)
 
-```
-vibindu/
-├── grafcet-editor/     # React + TypeScript frontend
-├── grafcet-backend/    # AdonisJS backend API
-├── grafcet-agents/     # Python AI agents
-└── documentation/      # User guides and references
-```
+Vibindu is built with a powerful, modular architecture designed for the Gemini 3 Live Hackathon:
 
-## 🚀 Quick Start
+- **Frontend (`grafcet-editor/`)**: A React + TypeScript application offering an intuitive drag-and-drop workspace for building GRAFCET and SFC diagrams. It communicates with the backend via REST and WebSockets for real-time AI assistance.
+- **Backend (`grafcet-backend/`)**: An AdonisJS application providing robust API endpoints, managing project persistence, compilation, and acting as the middleware bridging the frontend editor with the AI agents.
+- **AI Agents (`grafcet-agents/`)**: A Python-based agentic system utilizing Google Gemini. The agents collaborate to analyze user intent, generate operating modes (e.g., Gemma A1, F1), engineer valid SFC logic, and configure the simulation environment—all autonomously. The system uses "Vibe Coding", dynamically verifying and compiling the logic.
+
+## 🚀 Spin-up Instructions for Judges
+
+Follow these steps to reproduce the project and run the Vibindu environment locally.
 
 ### Prerequisites
 
-- Node.js 18+
-- Python 3.10+
-- Docker (optional)
+- **Node.js**: Version 18 or higher
+- **Python**: Version 3.10 or higher
+- **Gemini API Key**: Required for the AI agents to function.
 
-### Development Setup
+### Step 1: Clone the Repository
+
+```bash
+git clone https://github.com/ElHadheqMind/Vibindu-live.git
+cd Vibindu-live
+```
+
+### Step 2: Configure Environment Variables
+
+Navigate to the `grafcet-agents` directory and configure the Gemini API key:
+
+```bash
+cd grafcet-agents
+cp .env.example .env
+# Edit .env and paste your GEMINI_API_KEY
+```
+
+### Step 3: Setup and Install Dependencies
+
+We have provided convenient setup scripts that install all dependencies for the Frontend and Backend simultaneously.
 
 **Windows:**
-```bash
+```cmd
 ./setup.bat
-./start-dev.bat
 ```
 
 **Linux/Mac:**
 ```bash
 ./setup.sh
+```
+
+Next, set up the Agent environment:
+```bash
+cd grafcet-agents
+python -m venv venv
+# On Windows: venv\Scripts\activate | On Mac/Linux: source venv/bin/activate
+pip install -r requirements.txt
+```
+
+### Step 4: Run the Application!
+
+**1. Start the Frontend and Backend:**
+From the root directory (`Vibindu-live`):
+**Windows:**
+```cmd
+./start-dev.bat
+```
+**Linux/Mac:**
+```bash
 ./start-dev.sh
 ```
+- Frontend will be live at: `http://localhost:5174`
+- Backend API will be live at: `http://localhost:3001`
 
-### Using Docker
-
+**2. Start the AI Agents Server:**
+Open a new terminal, activate the virtual environment, and run the FastAPI server:
 ```bash
-docker-compose up
+cd grafcet-agents
+# On Windows: venv\Scripts\activate | On Mac/Linux: source venv/bin/activate
+fastapi run __init__.py --port 8000
 ```
+- Agents API will be live at: `http://localhost:8000`
+
+### Step 5: Test the Application
+Open the Frontend URL (`http://localhost:5174`) in your browser. You can now use the visual editor, create new projects, and chat with the AI Agent in the "Vibe" panel to generate SFC code via natural language input!
 
 ## 📚 Documentation
 
